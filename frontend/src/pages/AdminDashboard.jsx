@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                         {/* Screenshot Section */}
                         <div className="flex-1 bg-slate-100 relative group overflow-hidden">
                             <img
-                                src={`http://localhost:5001/${selectedOrder.paymentScreenshot}`}
+                                src={selectedOrder.paymentScreenshot}
                                 alt="Payment Screenshot"
                                 className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-700"
                             />
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
                                     <p className="text-2xl font-black text-slate-900 mt-1">₹{selectedOrder.totalAmount}</p>
                                 </div>
                                 <button
-                                    onClick={() => window.open(`http://localhost:5001/${selectedOrder.paymentScreenshot}`, '_blank')}
+                                    onClick={() => window.open(selectedOrder.paymentScreenshot, '_blank')}
                                     className="p-3 bg-slate-900 text-white rounded-xl hover:bg-orange-600 transition-all"
                                 >
                                     <ExternalLink size={20} />

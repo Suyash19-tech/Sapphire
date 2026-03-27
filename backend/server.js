@@ -9,6 +9,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const Order = require('./models/Order');
 const MenuItem = require('./models/MenuItem');
 const User = require('./models/User');
@@ -45,18 +47,20 @@ app.use(morgan('dev')); // Log requests
 // Standard Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-    maxAge: '1d', // Cache uploads for 1 day
-    immutable: true
-}));
 
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+// Cloudinary Configuration
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'Root',
+    api_key: process.env.CLOUDINARY_API_KEY || '193528867551183',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'N5XZhAbz-_tazuPYAegYF-iU5kU'
+});
+
+// Multer Storage Configuration (Cloudinary)
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'CampusCraves',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp']
     }
 });
 
