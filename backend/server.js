@@ -50,9 +50,9 @@ app.use(express.json());
 
 // Cloudinary Configuration
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'Root',
-    api_key: process.env.CLOUDINARY_API_KEY || '193528867551183',
-    api_secret: process.env.CLOUDINARY_API_SECRET || 'N5XZhAbz-_tazuPYAegYF-iU5kU'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 // Multer Storage Configuration (Cloudinary)
@@ -60,11 +60,33 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'CampusCraves',
-        allowed_formats: ['jpg', 'png', 'jpeg', 'webp']
+        resource_type: 'auto',
+        // removed allowed_formats to be more flexible
     }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Wrapper to catch Multer errors specifically
+const uploadMiddleware = (req, res, next) => {
+    console.log('Incoming file upload request...');
+    const uploadSingle = upload.single('paymentScreenshot');
+    uploadSingle(req, res, function (err) {
+        if (err instanceof multer.MulterError) {
+            console.error('Multer Error:', err);
+            return res.status(400).json({ error: 'File upload error', details: err.message });
+        } else if (err) {
+            console.error('Cloudinary/Upload Error Details:', JSON.stringify(err, null, 2));
+            console.error('Unknown Upload Error:', err);
+            return res.status(500).json({ error: 'Unknown file upload error', details: err.message || err.toString() });
+        }
+        console.log('File upload successful:', req.file ? req.file.path : 'No file');
+        next();
+    });
+};
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/campuscraves')
@@ -142,8 +164,15 @@ app.patch('/api/menu/:id', async (req, res) => {
 });
 
 // Create a new order (with screenshot upload)
-app.post('/api/orders', auth, upload.single('paymentScreenshot'), async (req, res) => {
+app.post('/api/orders', auth, uploadMiddleware, async (req, res) => {
     try {
+        console.log('Order creation request body:', JSON.stringify(req.body, null, 2));
+        console.log('Order creation request file:', req.file ? JSON.stringify(req.file, null, 2) : 'No file');
+
+        if (!req.file) {
+            console.log('Warning: No file uploaded or Multer failed to process it.');
+        }
+
         const { items, totalAmount, cookingInstructions } = req.body;
 
         const newOrder = new Order({
@@ -157,8 +186,13 @@ app.post('/api/orders', auth, upload.single('paymentScreenshot'), async (req, re
         const savedOrder = await newOrder.save();
         res.status(201).json(savedOrder);
     } catch (err) {
-        console.error('Error creating order:', err);
-        res.status(500).json({ error: 'Failed to create order' });
+        console.error('Error creating order details:', err);
+        console.error('Error message:', err.message);
+        console.error('Error stack:', err.stack);
+        if (err.name === 'ValidationError') {
+            console.error('Validation errors:', Object.values(err.errors).map(e => e.message));
+        }
+        res.status(500).json({ error: 'Failed to create order', details: err.message });
     }
 });
 
