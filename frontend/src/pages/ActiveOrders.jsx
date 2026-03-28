@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Circle, UtensilsCrossed, Flame, ShoppingBag, Loader2, Hash } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getMyOrders } from '../api';
+import { io } from 'socket.io-client';
 
 export default function ActiveOrders() {
     const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function ActiveOrders() {
     const [loading, setLoading] = useState(true);
     const [remainingSeconds, setRemainingSeconds] = useState(0);
     const [tokenNumber, setTokenNumber] = useState(null);
+    const socketRef = useRef(null);
 
     useEffect(() => {
         const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -35,8 +37,45 @@ export default function ActiveOrders() {
         };
 
         fetchOrders();
-        const interval = setInterval(fetchOrders, 10000); // Poll every 10s
-        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        socketRef.current = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] });
+
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!socketRef.current) return;
+
+        const handler = (updatedOrder) => {
+            // Check if updatedOrder.user.tokenNumber matches the current logged-in user's token number
+            const storedUser = JSON.parse(localStorage.getItem('user'));
+            if (storedUser && updatedOrder.user && updatedOrder.user.tokenNumber === storedUser.tokenNumber) {
+                setOrders(prevOrders => {
+                    return prevOrders.map(order => {
+                        if (order._id === updatedOrder._id) {
+                            return {
+                                ...order,
+                                status: updatedOrder.status,
+                                estimatedCompletionTime: updatedOrder.estimatedCompletionTime
+                            };
+                        }
+                        return order;
+                    });
+                });
+            }
+        };
+
+        socketRef.current.on('user_orderUpdated', handler);
+        return () => {
+            socketRef.current?.off('user_orderUpdated', handler);
+        };
     }, []);
 
     useEffect(() => {
@@ -187,23 +226,43 @@ export default function ActiveOrders() {
                                 </div>
                             </div>
 
-                            {/* Countdown Hero Section (Only show if preparing or pending) */}
-                            {['PENDING_VERIFICATION', 'PREPARING'].includes(latestOrder.status) && (
-                                <div className="bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl shadow-slate-300 relative overflow-hidden text-center">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-                                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-500/10 rounded-full -ml-16 -mb-16 blur-2xl" />
+                            {/* Hero Section: Countdown or Ready Badge */}
+                            {['PENDING_VERIFICATION', 'PREPARING', 'READY'].includes(latestOrder.status) && (
+                                <div className={`rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden text-center transition-all duration-500 ${latestOrder.status === 'READY' ? 'bg-green-500 shadow-green-200' : 'bg-slate-900 shadow-slate-300'}`}>
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mb-16 blur-2xl" />
 
                                     <div className="relative z-10">
-                                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-4">Estimated Ready In</p>
-                                        <div className="text-7xl font-black text-white font-mono tracking-tighter mb-8 tabular-nums">
-                                            {String(minutes).padStart(2, '0')}<span className="text-orange-500 animate-pulse">:</span>{String(seconds).padStart(2, '0')}
-                                        </div>
-                                        <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden shadow-inner mb-2">
-                                            <div
-                                                className="bg-orange-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(249,115,22,0.6)]"
-                                                style={{ width: `${progress}%` }}
-                                            ></div>
-                                        </div>
+                                        {latestOrder.status === 'READY' ? (
+                                            <motion.div
+                                                initial={{ scale: 0.9, opacity: 0 }}
+                                                animate={{ scale: [1, 1.05, 1], opacity: 1 }}
+                                                transition={{
+                                                    scale: { repeat: Infinity, duration: 2 },
+                                                    opacity: { duration: 0.5 }
+                                                }}
+                                            >
+                                                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                                                    <CheckCircle2 size={40} className="text-white" />
+                                                </div>
+                                                <p className="text-[10px] font-black text-white/80 uppercase tracking-[0.2em] mb-2">Your Order is</p>
+                                                <h2 className="text-4xl font-black text-white tracking-tighter uppercase">Ready for Pickup!</h2>
+                                                <p className="text-white/60 text-xs font-bold mt-4">Please show your token at the counter</p>
+                                            </motion.div>
+                                        ) : (
+                                            <>
+                                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-4">Estimated Ready In</p>
+                                                <div className="text-7xl font-black text-white font-mono tracking-tighter mb-8 tabular-nums">
+                                                    {String(minutes).padStart(2, '0')}<span className="text-orange-500 animate-pulse">:</span>{String(seconds).padStart(2, '0')}
+                                                </div>
+                                                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden shadow-inner mb-2">
+                                                    <div
+                                                        className="bg-orange-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(249,115,22,0.6)]"
+                                                        style={{ width: `${progress}%` }}
+                                                    ></div>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}

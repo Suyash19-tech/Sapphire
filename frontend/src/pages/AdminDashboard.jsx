@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getActiveOrders, updateOrderStatus } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { io } from 'socket.io-client';
 import {
     LayoutDashboard,
     ShoppingBag,
@@ -56,6 +57,8 @@ export default function AdminDashboard() {
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showPrepTime, setShowPrepTime] = useState(false);
+    const [audioEnabled, setAudioEnabled] = useState(false);
+    const socketRef = useRef(null);
 
     const fetchOrders = React.useCallback(async (isInitialLoad = false) => {
         if (isInitialLoad) {
@@ -80,10 +83,33 @@ export default function AdminDashboard() {
     }, []);
 
     useEffect(() => {
-        fetchOrders(true); // Initial load with loading state
-        const interval = setInterval(() => fetchOrders(false), 10000); // Silent background fetch
-        return () => clearInterval(interval);
+        fetchOrders(true);
     }, [fetchOrders]);
+
+    useEffect(() => {
+        socketRef.current = io(import.meta.env.VITE_API_URL, { transports: ['websocket'] });
+        return () => {
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!socketRef.current) return;
+        const handler = (newOrder) => {
+            setOrders((prev) => [newOrder, ...prev]);
+            setLastUpdated(new Date());
+            if (audioEnabled) {
+                new Audio('/ding.mp3').play().catch(() => { });
+            }
+        };
+        socketRef.current.on('admin_newOrder', handler);
+        return () => {
+            socketRef.current?.off('admin_newOrder', handler);
+        };
+    }, [audioEnabled]);
 
     const handleStatusUpdate = async (orderId, newStatus, extraData = {}) => {
         const originalOrders = [...orders];
@@ -308,6 +334,15 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                            <input
+                                type="checkbox"
+                                checked={audioEnabled}
+                                onChange={(e) => setAudioEnabled(e.target.checked)}
+                                className="accent-orange-500 w-4 h-4 rounded"
+                            />
+                            Enable Sound Alerts
+                        </label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input

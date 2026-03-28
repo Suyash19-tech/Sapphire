@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -23,6 +24,10 @@ const auth = require('./middleware/auth');
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
+const { Server } = require('socket.io');
+const io = new Server(server, { cors: { origin: '*' } });
+app.set('io', io);
 const PORT = process.env.PORT || 5000;
 
 // Trust proxy for rate limiting on Render
@@ -241,6 +246,8 @@ app.post('/api/orders', auth, orderLimiter, uploadMiddleware, async (req, res) =
         });
 
         const savedOrder = await newOrder.save();
+        const populatedOrder = await Order.findById(savedOrder._id).populate('user', 'name phone tokenNumber');
+        req.app.get('io').emit('admin_newOrder', populatedOrder);
         res.status(201).json(savedOrder);
     } catch (err) {
         console.error('Error creating order details:', err);
@@ -308,12 +315,13 @@ app.patch('/api/orders/:id/status', async (req, res) => {
             updateData,
             { returnDocument: 'after' }
         );
+        req.app.get('io').emit('user_orderUpdated', updatedOrder);
         res.json(updatedOrder);
     } catch (err) {
         res.status(500).json({ error: 'Failed to update order' });
     }
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
