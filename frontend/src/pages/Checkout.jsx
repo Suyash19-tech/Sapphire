@@ -225,8 +225,8 @@ export default function Checkout() {
                     <button
                         onClick={handleSubmit}
                         disabled={!isFileSelected || isSubmitting}
-                        className={`w-full py-5 rounded-[2rem] font-black text-base transition-all duration-500 shadow-2xl flex items-center justify-center gap-2 ${isFileSelected && !isSubmitting
-                            ? 'bg-slate-900 text-white shadow-slate-300 hover:scale-[1.02] active:scale-95'
+                        className={`w-full py-5 rounded-[2rem] font-black text-base transition-all duration-500 flex items-center justify-center gap-2 ${isFileSelected && !isSubmitting
+                            ? 'bg-slate-900 text-white shadow-2xl shadow-slate-300 hover:scale-[1.02] active:scale-95'
                             : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                             }`}
                     >

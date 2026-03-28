@@ -285,9 +285,23 @@ export default function AdminDashboard() {
                 {/* Orders Grid */}
                 <div className="flex-1 overflow-y-auto p-8">
                     {loading && orders.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                            <RefreshCw size={48} className="animate-spin mb-4" />
-                            <p className="font-bold">Loading active orders...</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {[1, 2, 3, 4, 5, 6].map((i) => (
+                                <div key={i} className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div>
+                                            <div className="h-8 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                        <div className="h-8 w-24 bg-slate-200 rounded-full animate-pulse"></div>
+                                    </div>
+                                    <div className="space-y-3 mb-6">
+                                        <div className="h-4 w-full bg-slate-200 rounded animate-pulse"></div>
+                                        <div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse"></div>
+                                    </div>
+                                    <div className="h-12 w-full bg-slate-200 rounded-xl animate-pulse"></div>
+                                </div>
+                            ))}
                         </div>
                     ) : orders.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-300">

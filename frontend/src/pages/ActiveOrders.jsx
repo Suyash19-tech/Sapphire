@@ -63,8 +63,29 @@ export default function ActiveOrders() {
 
     if (loading) {
         return (
-            <main className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 size={40} className="text-orange-500 animate-spin" />
+            <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased">
+                <div className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden pb-20">
+                    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
+                        <div className="px-6 py-6 flex items-center gap-4">
+                            <div className="w-10 h-10 bg-slate-200 rounded-xl animate-pulse"></div>
+                            <div className="space-y-2">
+                                <div className="h-6 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                <div className="h-3 w-20 bg-slate-200 rounded animate-pulse"></div>
+                            </div>
+                        </div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto px-6 py-8 space-y-8">
+                        <div className="h-24 bg-slate-200 rounded-3xl animate-pulse"></div>
+                        <div className="space-y-4">
+                            <div className="h-8 w-48 bg-slate-200 rounded animate-pulse"></div>
+                            <div className="h-64 bg-slate-200 rounded-3xl animate-pulse"></div>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="h-8 w-32 bg-slate-200 rounded animate-pulse"></div>
+                            <div className="h-32 bg-slate-200 rounded-3xl animate-pulse"></div>
+                        </div>
+                    </div>
+                </div>
             </main>
         );
     }

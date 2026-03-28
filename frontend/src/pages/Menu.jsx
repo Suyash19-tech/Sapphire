@@ -13,17 +13,29 @@ export default function Menu() {
     const scrollContainerRef = useRef(null);
 
     useEffect(() => {
-        const fetchMenu = async () => {
+        const fetchAndCacheMenu = async () => {
+            // Instantly load from cache if available
+            const cachedMenu = localStorage.getItem('cachedMenu');
+            if (cachedMenu) {
+                setMenuData(JSON.parse(cachedMenu));
+                setLoading(false);
+            }
+
+            // Fetch fresh data and update cache
             try {
                 const data = await getMenu();
                 setMenuData(data);
+                localStorage.setItem('cachedMenu', JSON.stringify(data));
             } catch (error) {
                 console.error('Failed to fetch menu:', error);
             } finally {
-                setLoading(false);
+                // If there was no cache, loading will still be true, so turn it off
+                if (loading) {
+                    setLoading(false);
+                }
             }
         };
-        fetchMenu();
+        fetchAndCacheMenu();
     }, []);
 
     const categories = ['All', ...new Set(menuData.map(item => item.category))];
