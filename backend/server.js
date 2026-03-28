@@ -25,6 +25,20 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for rate limiting on Render
+app.set('trust proxy', 1);
+
+// CORS Configuration to allow Vercel frontend and local development
+const corsOptions = {
+    origin: [
+        'http://localhost:5173', // Vite dev server
+        'https://campus-craves.vercel.app' // Vercel deployment
+    ],
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
 // Security Middlewares
 app.use(helmet({
     crossOriginResourcePolicy: false, // Allow images to be served
@@ -45,16 +59,6 @@ app.use(compression()); // Gzip compression
 app.use(morgan('dev')); // Log requests
 
 // Standard Middleware
-// CORS Configuration to allow Vercel frontend and local development
-const corsOptions = {
-    origin: [
-        'http://localhost:5173', // Vite dev server
-        'https://campus-craves.vercel.app' // Vercel deployment
-    ],
-    credentials: true,
-    optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
 app.use(express.json());
 
 // Cloudinary Configuration
