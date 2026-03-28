@@ -127,10 +127,33 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
+// Menu Cache Variables
+let menuCache = null;
+let menuCacheTimeout = null;
+
+const clearMenuCache = () => {
+    menuCache = null;
+    if (menuCacheTimeout) {
+        clearTimeout(menuCacheTimeout);
+        menuCacheTimeout = null;
+    }
+};
+
 // Menu Management Routes
 app.get('/api/menu', async (req, res) => {
     try {
+        if (menuCache) {
+            return res.json(menuCache);
+        }
+
         const menuItems = await MenuItem.find().sort({ category: 1, name: 1 });
+
+        // Set cache
+        menuCache = menuItems;
+        menuCacheTimeout = setTimeout(() => {
+            menuCache = null;
+        }, 5 * 60 * 1000); // 5 minutes
+
         res.json(menuItems);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch menu items' });
@@ -143,6 +166,7 @@ app.post('/api/menu', async (req, res) => {
         console.log('Creating new menu item:', { name, price, category, popular });
         const newItem = new MenuItem({ name, price, category, popular });
         const savedItem = await newItem.save();
+        clearMenuCache(); // Clear cache on update
         res.status(201).json(savedItem);
     } catch (err) {
         console.error('Error creating menu item:', err);
@@ -157,14 +181,34 @@ app.patch('/api/menu/:id', async (req, res) => {
             req.body,
             { returnDocument: 'after' }
         );
+        clearMenuCache(); // Clear cache on update
         res.json(updatedItem);
     } catch (err) {
         res.status(500).json({ error: 'Failed to update menu item' });
     }
 });
 
+app.delete('/api/menu/:id', async (req, res) => {
+    try {
+        await MenuItem.findByIdAndDelete(req.params.id);
+        clearMenuCache(); // Clear cache on update
+        res.json({ message: 'Menu item deleted' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete menu item' });
+    }
+});
+
+// Rate Limiting for specific sensitive routes
+const orderLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, // 10 minutes
+    limit: 5, // Limit each IP to 5 order creations per window
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many orders created from this IP, please try again after 10 minutes' }
+});
+
 // Create a new order (with screenshot upload)
-app.post('/api/orders', auth, uploadMiddleware, async (req, res) => {
+app.post('/api/orders', auth, orderLimiter, uploadMiddleware, async (req, res) => {
     try {
         console.log('Order creation request body:', JSON.stringify(req.body, null, 2));
         console.log('Order creation request file:', req.file ? JSON.stringify(req.file, null, 2) : 'No file');

@@ -16,7 +16,8 @@ const menuItemSchema = new mongoose.Schema({
     },
     isAvailable: {
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     },
     rating: {
         type: Number,

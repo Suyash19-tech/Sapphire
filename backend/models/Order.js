@@ -26,7 +26,8 @@ const orderSchema = new mongoose.Schema({
     status: {
         type: String,
         default: 'PENDING_VERIFICATION',
-        enum: ['PENDING_VERIFICATION', 'PREPARING', 'READY', 'COMPLETED', 'REJECTED']
+        enum: ['PENDING_VERIFICATION', 'PREPARING', 'READY', 'COMPLETED', 'REJECTED'],
+        index: true
     },
     estimatedTime: {
         type: Number, // In minutes
