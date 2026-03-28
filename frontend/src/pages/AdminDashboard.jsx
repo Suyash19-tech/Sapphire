@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getActiveOrders, updateOrderStatus } from '../api';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard,
     ShoppingBag,
@@ -127,127 +128,138 @@ export default function AdminDashboard() {
 
     return (
         <div className="flex h-screen bg-slate-50 font-sans antialiased overflow-hidden relative">
-            {/* Action Modal */}
-            {selectedOrder && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-                    <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl flex flex-col md:flex-row overflow-hidden relative scale-in-center animate-in zoom-in-95 duration-300">
-                        {/* Close Button */}
-                        <button
-                            onClick={() => { setSelectedOrder(null); setShowPrepTime(false); }}
-                            className="absolute top-6 right-6 z-10 p-3 bg-white/80 backdrop-blur-md text-slate-900 rounded-2xl hover:bg-slate-100 transition-all shadow-lg"
+            <AnimatePresence>
+                {selectedOrder && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl flex flex-col md:flex-row overflow-hidden relative"
                         >
-                            <X size={24} />
-                        </button>
+                            {/* Close Button */}
+                            <button
+                                onClick={() => { setSelectedOrder(null); setShowPrepTime(false); }}
+                                className="absolute top-6 right-6 z-10 p-3 bg-white/80 backdrop-blur-md text-slate-900 rounded-2xl hover:bg-slate-100 transition-all shadow-lg"
+                            >
+                                <X size={24} />
+                            </button>
 
-                        {/* Screenshot Section */}
-                        <div className="flex-1 bg-slate-100 relative group overflow-hidden">
-                            <img
-                                src={selectedOrder.paymentScreenshot}
-                                alt="Payment Screenshot"
-                                className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-700"
-                            />
-                            <div className="absolute bottom-6 left-6 right-6 flex justify-between items-center bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl">
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Expected Total</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1">₹{selectedOrder.totalAmount}</p>
-                                </div>
-                                <button
-                                    onClick={() => window.open(selectedOrder.paymentScreenshot, '_blank')}
-                                    className="p-3 bg-slate-900 text-white rounded-xl hover:bg-orange-600 transition-all"
-                                >
-                                    <ExternalLink size={20} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Details & Actions Section */}
-                        <div className="w-full md:w-[400px] p-8 flex flex-col bg-white">
-                            <div className="mb-8">
-                                <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Action Required</p>
-                                <h2 className="text-3xl font-black text-slate-900 mt-1">Token #{selectedOrder.user?.tokenNumber || 'N/A'}</h2>
-                                <p className="text-slate-400 text-sm font-medium mt-2">Placed on {new Date(selectedOrder.createdAt).toLocaleString()}</p>
-                            </div>
-
-                            {/* Customer Details */}
-                            <div className="mb-8 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Customer Details</h3>
-                                <div className="space-y-1">
-                                    <p className="text-base font-black text-slate-900">{selectedOrder.user?.name || 'Unknown'}</p>
-                                    {selectedOrder.user?.phone && (
-                                        <a
-                                            href={`tel:${selectedOrder.user.phone}`}
-                                            className="text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors flex items-center gap-1"
-                                        >
-                                            {selectedOrder.user.phone}
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex-1 space-y-6 overflow-y-auto pr-2 scrollbar-hide">
-                                <div>
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Order Summary</h3>
-                                    <div className="space-y-3 bg-slate-50 rounded-3xl p-6">
-                                        {selectedOrder.items.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center">
-                                                <span className="text-sm font-bold text-slate-700">{item.name} x {item.qty}</span>
-                                                <span className="text-sm font-black text-slate-900">₹{item.price * item.qty}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {selectedOrder.cookingInstructions && (
+                            {/* Screenshot Section */}
+                            <div className="flex-1 bg-slate-100 relative group overflow-hidden">
+                                <img
+                                    src={selectedOrder.paymentScreenshot}
+                                    alt="Payment Screenshot"
+                                    className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-700"
+                                />
+                                <div className="absolute bottom-6 left-6 right-6 flex justify-between items-center bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl">
                                     <div>
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Instructions</h3>
-                                        <div className="bg-orange-50 text-orange-700 p-5 rounded-3xl text-sm font-medium leading-relaxed border border-orange-100">
-                                            {selectedOrder.cookingInstructions}
-                                        </div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Expected Total</p>
+                                        <p className="text-2xl font-black text-slate-900 mt-1">₹{selectedOrder.totalAmount}</p>
                                     </div>
-                                )}
+                                    <button
+                                        onClick={() => window.open(selectedOrder.paymentScreenshot, '_blank')}
+                                        className="p-3 bg-slate-900 text-white rounded-xl hover:bg-orange-600 transition-all"
+                                    >
+                                        <ExternalLink size={20} />
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Actions Area */}
-                            <div className="mt-8 pt-8 border-t border-slate-100">
-                                {!showPrepTime ? (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            onClick={() => handleStatusUpdate(selectedOrder._id, 'REJECTED')}
-                                            className="bg-red-50 text-red-600 py-5 rounded-[2rem] font-black text-sm hover:bg-red-100 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
-                                        >
-                                            <XCircle size={24} /> Reject
-                                        </button>
-                                        <button
-                                            onClick={() => setShowPrepTime(true)}
-                                            className="bg-green-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-2xl shadow-green-200 hover:bg-green-600 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
-                                        >
-                                            <CheckCircle size={24} /> Verify & Accept
-                                        </button>
+                            {/* Details & Actions Section */}
+                            <div className="w-full md:w-[400px] p-8 flex flex-col bg-white">
+                                <div className="mb-8">
+                                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em]">Action Required</p>
+                                    <h2 className="text-3xl font-black text-slate-900 mt-1">Token #{selectedOrder.user?.tokenNumber || 'N/A'}</h2>
+                                    <p className="text-slate-400 text-sm font-medium mt-2">Placed on {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                                </div>
+
+                                {/* Customer Details */}
+                                <div className="mb-8 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Customer Details</h3>
+                                    <div className="space-y-1">
+                                        <p className="text-base font-black text-slate-900">{selectedOrder.user?.name || 'Unknown'}</p>
+                                        {selectedOrder.user?.phone && (
+                                            <a
+                                                href={`tel:${selectedOrder.user.phone}`}
+                                                className="text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors flex items-center gap-1"
+                                            >
+                                                {selectedOrder.user.phone}
+                                            </a>
+                                        )}
                                     </div>
-                                ) : (
-                                    <div className="animate-in slide-in-from-bottom-4 duration-300">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Select Prep Time</h3>
-                                            <button onClick={() => setShowPrepTime(false)} className="text-slate-400 hover:text-slate-900 font-bold text-xs uppercase">Back</button>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {[5, 10, 15, 20, 25, 30, 45].map(time => (
-                                                <button
-                                                    key={time}
-                                                    onClick={() => handleStatusUpdate(selectedOrder._id, 'PREPARING', { prepTime: time })}
-                                                    className="bg-slate-50 border border-slate-100 py-4 rounded-2xl font-black text-slate-700 hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-transform transform active:scale-90"
-                                                >
-                                                    {time}m
-                                                </button>
+                                </div>
+
+                                <div className="flex-1 space-y-6 overflow-y-auto pr-2 scrollbar-hide">
+                                    <div>
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Order Summary</h3>
+                                        <div className="space-y-3 bg-slate-50 rounded-3xl p-6">
+                                            {selectedOrder.items.map((item, idx) => (
+                                                <div key={idx} className="flex justify-between items-center">
+                                                    <span className="text-sm font-bold text-slate-700">{item.name} x {item.qty}</span>
+                                                    <span className="text-sm font-black text-slate-900">₹{item.price * item.qty}</span>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+
+                                    {selectedOrder.cookingInstructions && (
+                                        <div>
+                                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Instructions</h3>
+                                            <div className="bg-orange-50 text-orange-700 p-5 rounded-3xl text-sm font-medium leading-relaxed border border-orange-100">
+                                                {selectedOrder.cookingInstructions}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Actions Area */}
+                                <div className="mt-8 pt-8 border-t border-slate-100">
+                                    {!showPrepTime ? (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button
+                                                onClick={() => handleStatusUpdate(selectedOrder._id, 'REJECTED')}
+                                                className="bg-red-50 text-red-600 py-5 rounded-[2rem] font-black text-sm hover:bg-red-100 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
+                                            >
+                                                <XCircle size={24} /> Reject
+                                            </button>
+                                            <button
+                                                onClick={() => setShowPrepTime(true)}
+                                                className="bg-green-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-2xl shadow-green-200 hover:bg-green-600 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
+                                            >
+                                                <CheckCircle size={24} /> Verify & Accept
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-in slide-in-from-bottom-4 duration-300">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Select Prep Time</h3>
+                                                <button onClick={() => setShowPrepTime(false)} className="text-slate-400 hover:text-slate-900 font-bold text-xs uppercase">Back</button>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {[5, 10, 15, 20, 25, 30, 45].map(time => (
+                                                    <button
+                                                        key={time}
+                                                        onClick={() => handleStatusUpdate(selectedOrder._id, 'PREPARING', { prepTime: time })}
+                                                        className="bg-slate-50 border border-slate-100 py-4 rounded-2xl font-black text-slate-700 hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-transform transform active:scale-90"
+                                                    >
+                                                        {time}m
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden lg:flex">
@@ -335,9 +347,12 @@ export default function AdminDashboard() {
                             <p className="text-sm font-medium">All orders have been completed or rejected.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {orders.map((order) => (
-                                <div
+                                <motion.div
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
                                     key={order._id}
                                     onClick={() => order.status === 'PENDING_VERIFICATION' && setSelectedOrder(order)}
                                     className={`bg-white border rounded-[2rem] p-6 shadow-sm hover:shadow-xl hover:shadow-slate-100 transition-all duration-300 relative overflow-hidden group ${order.status === 'PENDING_VERIFICATION' ? 'border-amber-400 ring-4 ring-amber-50 cursor-pointer scale-[1.01]' : 'border-slate-100 opacity-90'
@@ -422,9 +437,9 @@ export default function AdminDashboard() {
                                             )}
                                         </div>
                                     )}
-                                </div>
+                                </motion.div>
                             ))}
-                        </div>
+                        </motion.div>
                     )}
                 </div>
             </main>
