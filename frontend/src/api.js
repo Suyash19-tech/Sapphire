@@ -186,10 +186,12 @@ export const getMyOrders = async (token) => {
 
 export const updateOrderStatus = async (orderId, status, extraData = {}) => {
     try {
+        const token = localStorage.getItem('token');
         const response = await fetch(`${BASE_URL}/orders/${orderId}/status`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
             },
             body: JSON.stringify({ status, ...extraData }),
         });
