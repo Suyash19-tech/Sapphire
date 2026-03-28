@@ -57,7 +57,10 @@ export default function AdminDashboard() {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showPrepTime, setShowPrepTime] = useState(false);
 
-    const fetchOrders = async () => {
+    const fetchOrders = React.useCallback(async (isInitialLoad = false) => {
+        if (isInitialLoad) {
+            setLoading(true);
+        }
         try {
             const data = await getActiveOrders();
             const sortedData = [...data].sort((a, b) => {
@@ -70,15 +73,17 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error('Failed to fetch orders:', error);
         } finally {
-            setLoading(false);
+            if (isInitialLoad) {
+                setLoading(false);
+            }
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchOrders();
-        const interval = setInterval(fetchOrders, 10000);
+        fetchOrders(true); // Initial load with loading state
+        const interval = setInterval(() => fetchOrders(false), 10000); // Silent background fetch
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchOrders]);
 
     const handleStatusUpdate = async (orderId, newStatus, extraData = {}) => {
         const originalOrders = [...orders];
