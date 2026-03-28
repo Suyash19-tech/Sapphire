@@ -314,7 +314,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
             req.params.id,
             updateData,
             { returnDocument: 'after' }
-        );
+        ).populate('user', 'name phone tokenNumber');
         req.app.get('io').emit('user_orderUpdated', updatedOrder);
         res.json(updatedOrder);
     } catch (err) {

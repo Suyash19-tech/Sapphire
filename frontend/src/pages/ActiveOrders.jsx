@@ -5,31 +5,16 @@ import { motion } from 'framer-motion';
 import { getMyOrders } from '../api';
 import { io } from 'socket.io-client';
 
-const CountdownHero = ({ order }) => {
-    const [remainingSeconds, setRemainingSeconds] = useState(0);
+const CountdownHero = ({ order, currentTime }) => {
+    const timeLeft = (order.status === 'PREPARING' && order.estimatedCompletionTime)
+        ? Math.max(0, new Date(order.estimatedCompletionTime).getTime() - currentTime)
+        : 0;
 
-    useEffect(() => {
-        if (order.status !== 'PREPARING' || !order.estimatedCompletionTime) {
-            setRemainingSeconds(0);
-            return;
-        }
-
-        const calculateTime = () => {
-            const end = new Date(order.estimatedCompletionTime).getTime();
-            const now = new Date().getTime();
-            const diff = Math.max(0, Math.floor((end - now) / 1000));
-            setRemainingSeconds(diff);
-        };
-
-        calculateTime();
-        const timer = setInterval(calculateTime, 1000);
-        return () => clearInterval(timer);
-    }, [order.status, order.estimatedCompletionTime]);
-
+    const remainingSeconds = Math.floor(timeLeft / 1000);
     const minutes = Math.floor(remainingSeconds / 60);
     const seconds = remainingSeconds % 60;
     const totalTimeSeconds = (order.estimatedTime || 15) * 60;
-    const progress = Math.min(100, (remainingSeconds / totalTimeSeconds) * 100);
+    const progress = totalTimeSeconds > 0 ? Math.min(100, (1 - (remainingSeconds / totalTimeSeconds)) * 100) : 0;
 
     return (
         <div className={`rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden text-center transition-all duration-500 ${order.status === 'READY' ? 'bg-green-500 shadow-green-200' : 'bg-slate-900 shadow-slate-300'}`}>
@@ -71,7 +56,7 @@ const CountdownHero = ({ order }) => {
     );
 };
 
-const OrderCard = ({ order }) => {
+const OrderCard = ({ order, currentTime }) => {
     return (
         <div className="space-y-6">
             {/* Status Tracking Steps */}
@@ -118,7 +103,7 @@ const OrderCard = ({ order }) => {
 
             {/* Hero Section: Countdown or Ready Badge */}
             {['PENDING_VERIFICATION', 'PREPARING', 'READY'].includes(order.status) && (
-                <CountdownHero order={order} />
+                <CountdownHero order={order} currentTime={currentTime} />
             )}
 
             {/* Order Details */}
@@ -159,6 +144,12 @@ export default function ActiveOrders() {
     const [loading, setLoading] = useState(true);
     const [tokenNumber, setTokenNumber] = useState(null);
     const socketRef = useRef(null);
+    const [currentTime, setCurrentTime] = useState(Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -316,7 +307,7 @@ export default function ActiveOrders() {
                         ) : (
                             <div className="space-y-12">
                                 {liveOrders.map(order => (
-                                    <OrderCard key={order._id} order={order} />
+                                    <OrderCard key={order._id} order={order} currentTime={currentTime} />
                                 ))}
                             </div>
                         )}
