@@ -161,7 +161,7 @@ function Dashboard() {
         </div>
 
         {/* Bottom Tab Bar (Aesthetics only for now) */}
-        <div className="mt-auto bg-white border-t border-slate-100 px-8 py-6 flex justify-between items-center relative z-10">
+        <div className="mt-auto bg-white border-t border-slate-100 px-8 py-6 flex justify-evenly items-center relative z-10">
           <button className="text-orange-500 flex flex-col items-center gap-1 transition-transform active:scale-90">
             <Utensils size={24} />
             <span className="text-[10px] font-bold uppercase tracking-widest">Home</span>
@@ -169,10 +169,6 @@ function Dashboard() {
           <button onClick={() => navigate('/orders')} className="text-slate-300 hover:text-slate-500 flex flex-col items-center gap-1 transition-all active:scale-90">
             <Clock size={24} />
             <span className="text-[10px] font-bold uppercase tracking-widest">Orders</span>
-          </button>
-          <button className="text-slate-300 hover:text-slate-500 flex flex-col items-center gap-1 transition-all active:scale-90">
-            <User size={24} />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Profile</span>
           </button>
         </div>
       </div>
