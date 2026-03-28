@@ -80,14 +80,39 @@ export default function AdminDashboard() {
     }, []);
 
     const handleStatusUpdate = async (orderId, newStatus, extraData = {}) => {
+        const originalOrders = [...orders];
+        const orderIndex = originalOrders.findIndex(o => o._id === orderId);
+        if (orderIndex === -1) return;
+
+        // Optimistically update UI
+        let updatedOrders;
+        if (newStatus === 'COMPLETED' || newStatus === 'REJECTED') {
+            updatedOrders = originalOrders.filter(o => o._id !== orderId);
+        } else {
+            updatedOrders = originalOrders.map(o => {
+                if (o._id === orderId) {
+                    const updatedOrder = { ...o, status: newStatus };
+                    if (newStatus === 'PREPARING' && extraData.prepTime) {
+                        updatedOrder.estimatedTime = extraData.prepTime;
+                        updatedOrder.estimatedCompletionTime = new Date(Date.now() + extraData.prepTime * 60000);
+                    }
+                    return updatedOrder;
+                }
+                return o;
+            });
+        }
+
+        setOrders(updatedOrders);
+        setSelectedOrder(null);
+        setShowPrepTime(false);
+
         try {
             await updateOrderStatus(orderId, newStatus, extraData);
-            toast.success(`Order ${newStatus.toLowerCase()} successfully!`);
-            setSelectedOrder(null);
-            setShowPrepTime(false);
-            fetchOrders();
+            // Success is silent, as the UI has already updated.
         } catch (error) {
-            toast.error('Failed to update status');
+            // Revert on failure
+            setOrders(originalOrders);
+            toast.error('Network Error: Update Failed. Please try again.');
         }
     };
 
