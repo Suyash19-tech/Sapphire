@@ -188,13 +188,13 @@ export default function AdminDashboard() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <button
                                             onClick={() => handleStatusUpdate(selectedOrder._id, 'REJECTED')}
-                                            className="bg-red-50 text-red-600 py-5 rounded-[2rem] font-black text-sm hover:bg-red-100 transition-all active:scale-95 flex flex-col items-center gap-2"
+                                            className="bg-red-50 text-red-600 py-5 rounded-[2rem] font-black text-sm hover:bg-red-100 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
                                         >
                                             <XCircle size={24} /> Reject
                                         </button>
                                         <button
                                             onClick={() => setShowPrepTime(true)}
-                                            className="bg-green-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-2xl shadow-green-200 hover:bg-green-600 transition-all active:scale-95 flex flex-col items-center gap-2"
+                                            className="bg-green-500 text-white py-5 rounded-[2rem] font-black text-sm shadow-2xl shadow-green-200 hover:bg-green-600 transition-transform transform active:scale-95 flex flex-col items-center gap-2"
                                         >
                                             <CheckCircle size={24} /> Verify & Accept
                                         </button>
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
                                                 <button
                                                     key={time}
                                                     onClick={() => handleStatusUpdate(selectedOrder._id, 'PREPARING', { prepTime: time })}
-                                                    className="bg-slate-50 border border-slate-100 py-4 rounded-2xl font-black text-slate-700 hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all active:scale-90"
+                                                    className="bg-slate-50 border border-slate-100 py-4 rounded-2xl font-black text-slate-700 hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-transform transform active:scale-90"
                                                 >
                                                     {time}m
                                                 </button>
@@ -239,7 +239,7 @@ export default function AdminDashboard() {
                     <button className="w-full flex items-center gap-3 px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 transition-all">
                         <LayoutDashboard size={20} /> Dashboard
                     </button>
-                    <button onClick={() => navigate('/kitchen')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-bold text-sm transition-all">
+                    <button onClick={() => navigate('/kitchen')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-bold text-sm transition-transform transform">
                         <ChefHat size={20} /> Kitchen
                     </button>
                 </nav>
@@ -275,7 +275,7 @@ export default function AdminDashboard() {
                         </div>
                         <button
                             onClick={fetchOrders}
-                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all text-slate-600"
+                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-transform transform text-slate-600"
                         >
                             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                         </button>

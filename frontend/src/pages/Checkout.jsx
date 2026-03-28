@@ -87,7 +87,7 @@ export default function Checkout() {
                     <div className="px-6 py-6 flex items-center gap-4">
                         <button
                             onClick={() => navigate(-1)}
-                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all active:scale-90"
+                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-transform transform active:scale-90"
                         >
                             <ArrowLeft size={20} className="text-slate-800" />
                         </button>
@@ -225,7 +225,7 @@ export default function Checkout() {
                     <button
                         onClick={handleSubmit}
                         disabled={!isFileSelected || isSubmitting}
-                        className={`w-full py-5 rounded-[2rem] font-black text-base transition-all duration-500 flex items-center justify-center gap-2 ${isFileSelected && !isSubmitting
+                        className={`w-full py-5 rounded-[2rem] font-black text-base transition-transform transform duration-500 flex items-center justify-center gap-2 ${isFileSelected && !isSubmitting
                             ? 'bg-slate-900 text-white shadow-2xl shadow-slate-300 hover:scale-[1.02] active:scale-95'
                             : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                             }`}

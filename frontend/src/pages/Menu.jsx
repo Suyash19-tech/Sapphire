@@ -103,7 +103,7 @@ export default function Menu() {
                         <div className="flex items-center gap-4">
                             <button
                                 onClick={() => navigate(-1)}
-                                className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all active:scale-90"
+                                className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-transform transform active:scale-90"
                             >
                                 <ArrowLeft size={20} className="text-slate-800" />
                             </button>
@@ -148,7 +148,7 @@ export default function Menu() {
                                 <button
                                     key={category}
                                     onClick={() => setSelectedCategory(category)}
-                                    className={`px-5 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all duration-300 ${selectedCategory === category
+                                    className={`px-5 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-transform transform duration-300 ${selectedCategory === category
                                         ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 scale-105'
                                         : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
                                         }`}
@@ -214,9 +214,9 @@ export default function Menu() {
                                                     <button
                                                         onClick={() => addToCart(item)}
                                                         disabled={!item.isAvailable}
-                                                        className={`px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-slate-200 ${item.isAvailable
-                                                                ? 'bg-slate-900 text-white hover:bg-orange-600 active:scale-95'
-                                                                : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
+                                                        className={`px-6 py-2.5 rounded-xl font-bold text-xs transition-transform transform shadow-lg shadow-slate-200 ${item.isAvailable
+                                                            ? 'bg-slate-900 text-white hover:bg-orange-600 active:scale-95'
+                                                            : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
                                                             }`}
                                                     >
                                                         {item.isAvailable ? 'ADD' : 'SOLD OUT'}
@@ -229,7 +229,7 @@ export default function Menu() {
                                                         >
                                                             <Minus size={14} />
                                                         </button>
-                                                        <span className="font-black text-white text-sm w-4 text-center">{quantity}</span>
+                                                        <span className="font-black text-white text-sm w-8 text-center">{quantity}</span>
                                                         <button
                                                             onClick={() => updateQuantity(item._id, quantity + 1)}
                                                             className="w-7 h-7 flex items-center justify-center text-white hover:bg-white/10 rounded-lg transition-colors"
@@ -260,7 +260,7 @@ export default function Menu() {
                     <div className="fixed bottom-8 left-0 right-0 max-w-[calc(100%-3rem)] w-full mx-auto z-50">
                         <button
                             onClick={() => navigate('/checkout', { state: { cartItems, totalPrice } })}
-                            className="w-full bg-slate-900 text-white p-5 rounded-[2rem] font-bold shadow-2xl shadow-slate-400 hover:scale-[1.02] active:scale-95 transition-all duration-300 flex items-center justify-between"
+                            className="w-full bg-slate-900 text-white p-5 rounded-[2rem] font-bold shadow-2xl shadow-slate-400 hover:scale-[1.02] active:scale-95 transition-transform transform duration-300 flex items-center justify-between"
                         >
                             <div className="flex items-center gap-4">
                                 <div className="bg-white/10 p-3 rounded-2xl relative">
