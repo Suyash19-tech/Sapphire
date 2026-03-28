@@ -79,7 +79,7 @@ export default function AdminDashboard() {
     }, [fetchOrders]);
 
     useEffect(() => {
-        socketRef.current = io(import.meta.env.VITE_API_URL, { transports: ['websocket', 'polling'], upgrade: true });
+        socketRef.current = io(import.meta.env.VITE_API_URL);
         return () => {
             if (socketRef.current) {
                 socketRef.current.disconnect();
