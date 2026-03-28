@@ -47,6 +47,34 @@ export default function AdminDashboard() {
     const socketRef = useRef(null);
     const [currentTime, setCurrentTime] = useState(Date.now());
 
+    // Notification Sound Function using Web Audio API (No external file needed)
+    const playNotificationSound = React.useCallback(() => {
+        if (!audioEnabled) return;
+
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sine'; // Clean beep
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch A5
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch (error) {
+            console.error('Audio Playback failed:', error);
+            // Fallback to HTML5 Audio if context fails
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => { });
+        }
+    }, [audioEnabled]);
+
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
         return () => clearInterval(timer);
@@ -90,18 +118,45 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         if (!socketRef.current) return;
-        const handler = (newOrder) => {
+
+        // Handler for new orders
+        const newOrderHandler = (newOrder) => {
             setOrders((prev) => [newOrder, ...prev]);
             setLastUpdated(new Date());
-            if (audioEnabled) {
-                new Audio('/ding.mp3').play().catch(() => { });
-            }
+            playNotificationSound();
         };
-        socketRef.current.on('admin_newOrder', handler);
+
+        // Handler for order updates (sync multiple admins + play completion sound)
+        const updateHandler = (updatedOrder) => {
+            setOrders((prev) => {
+                const existing = prev.find(o => o._id === updatedOrder._id);
+
+                // If the status changed to READY or COMPLETED, play the "Ping"
+                if (existing && existing.status !== updatedOrder.status) {
+                    if (['READY', 'COMPLETED'].includes(updatedOrder.status)) {
+                        playNotificationSound();
+                    }
+                }
+
+                // If COMPLETED or REJECTED, remove from active list
+                if (['COMPLETED', 'REJECTED'].includes(updatedOrder.status)) {
+                    return prev.filter(o => o._id !== updatedOrder._id);
+                }
+
+                // Otherwise update the object
+                return prev.map(o => o._id === updatedOrder._id ? updatedOrder : o);
+            });
+            setLastUpdated(new Date());
+        };
+
+        socketRef.current.on('admin_newOrder', newOrderHandler);
+        socketRef.current.on('user_orderUpdated', updateHandler);
+
         return () => {
-            socketRef.current?.off('admin_newOrder', handler);
+            socketRef.current?.off('admin_newOrder', newOrderHandler);
+            socketRef.current?.off('user_orderUpdated', updateHandler);
         };
-    }, [audioEnabled]);
+    }, [playNotificationSound]);
 
     const handleStatusUpdate = async (orderId, newStatus, extraData = {}) => {
         const originalOrders = [...orders];
@@ -326,15 +381,26 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                            <input
-                                type="checkbox"
-                                checked={audioEnabled}
-                                onChange={(e) => setAudioEnabled(e.target.checked)}
-                                className="accent-orange-500 w-4 h-4 rounded"
-                            />
-                            Enable Sound Alerts
-                        </label>
+                        <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={audioEnabled}
+                                    onChange={(e) => setAudioEnabled(e.target.checked)}
+                                    className="accent-orange-500 w-4 h-4 rounded"
+                                />
+                                Audio Alerts
+                            </label>
+                            {audioEnabled && (
+                                <button
+                                    onClick={playNotificationSound}
+                                    className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-orange-500"
+                                    title="Test Notification Sound"
+                                >
+                                    <RefreshCw size={14} />
+                                </button>
+                            )}
+                        </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input
