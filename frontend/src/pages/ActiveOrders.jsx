@@ -186,7 +186,7 @@ export default function ActiveOrders() {
     }, []);
 
     useEffect(() => {
-        socketRef.current = io(import.meta.env.VITE_API_URL, { transports: ['websocket'], upgrade: false });
+        socketRef.current = io(import.meta.env.VITE_API_URL, { transports: ['websocket', 'polling'], upgrade: true });
 
         return () => {
             if (socketRef.current) {
