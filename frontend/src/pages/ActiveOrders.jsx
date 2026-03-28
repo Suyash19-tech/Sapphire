@@ -159,12 +159,6 @@ export default function ActiveOrders() {
     const [loading, setLoading] = useState(true);
     const [tokenNumber, setTokenNumber] = useState(null);
     const socketRef = useRef(null);
-    const [currentTime, setCurrentTime] = useState(Date.now());
-
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, []);
 
     useEffect(() => {
         const storedUser = JSON.parse(localStorage.getItem('user'));
