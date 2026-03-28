@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Search, Plus, Minus, Star, Flame, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { getMenu } from '../api';
 
 export default function Menu() {
@@ -94,8 +95,14 @@ export default function Menu() {
     }
 
     return (
-        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased">
-            <div className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col pb-32 overflow-hidden">
+        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased overflow-x-hidden">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col pb-32 overflow-hidden"
+            >
 
                 {/* Header */}
                 <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
@@ -281,7 +288,7 @@ export default function Menu() {
                         </button>
                     </div>
                 )}
-            </div>
+            </motion.div>
         </main>
     );
 }

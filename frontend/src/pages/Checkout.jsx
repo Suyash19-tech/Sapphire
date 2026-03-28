@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Cloud, Camera, ShieldCheck, Smartphone, CheckCircle, Info, Utensils, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { createOrder } from '../api';
 
@@ -79,8 +80,14 @@ export default function Checkout() {
     const isFileSelected = file !== null;
 
     return (
-        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased">
-            <div className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden">
+        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased overflow-x-hidden">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden"
+            >
 
                 {/* Header */}
                 <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
@@ -245,7 +252,7 @@ export default function Checkout() {
                         <Info size={12} /> Verification takes ~1-2 mins
                     </p>
                 </div>
-            </div>
+            </motion.div>
         </main>
     );
 }

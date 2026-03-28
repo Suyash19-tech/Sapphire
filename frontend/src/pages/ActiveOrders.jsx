@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertCircle, CheckCircle2, Circle, UtensilsCrossed, Flame, ShoppingBag, Loader2, Hash } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { getMyOrders } from '../api';
 
 export default function ActiveOrders() {
@@ -93,8 +94,14 @@ export default function ActiveOrders() {
     const latestOrder = orders[0]; // For demo, show most recent
 
     return (
-        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased">
-            <div className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden pb-20">
+        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased overflow-x-hidden">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden pb-20"
+            >
 
                 {/* Header */}
                 <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
@@ -237,12 +244,12 @@ export default function ActiveOrders() {
                 <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-6 bg-white/80 backdrop-blur-lg border-t border-slate-100">
                     <button
                         onClick={() => navigate('/')}
-                        className="w-full py-4 rounded-2xl font-black text-sm bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all active:scale-95"
+                        className="w-full py-4 rounded-2xl font-black text-sm bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-transform transform active:scale-95"
                     >
                         Return to Home
                     </button>
                 </div>
-            </div>
+            </motion.div>
         </main>
     );
 }
