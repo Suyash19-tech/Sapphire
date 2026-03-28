@@ -45,7 +45,16 @@ app.use(compression()); // Gzip compression
 app.use(morgan('dev')); // Log requests
 
 // Standard Middleware
-app.use(cors());
+// CORS Configuration to allow Vercel frontend and local development
+const corsOptions = {
+    origin: [
+        'http://localhost:5173', // Vite dev server
+        'https://campus-craves.vercel.app' // Vercel deployment
+    ],
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Cloudinary Configuration
