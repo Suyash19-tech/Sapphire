@@ -316,7 +316,7 @@ export default function ActiveOrders() {
                         ) : (
                             <div className="space-y-12">
                                 {liveOrders.map(order => (
-                                    <OrderCard key={order._id} order={order} currentTime={currentTime} />
+                                    <OrderCard key={order._id} order={order} />
                                 ))}
                             </div>
                         )}
