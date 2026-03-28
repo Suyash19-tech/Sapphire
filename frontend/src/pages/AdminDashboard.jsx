@@ -19,18 +19,32 @@ import {
     ExternalLink
 } from 'lucide-react';
 
-const CountdownTimer = ({ estimatedCompletionTime, currentTime }) => {
-    const timeLeft = estimatedCompletionTime
-        ? Math.max(0, new Date(estimatedCompletionTime).getTime() - currentTime)
-        : 0;
+const CountdownTimer = ({ estimatedCompletionTime }) => {
+    const [timeLeft, setTimeLeft] = useState(0);
 
-    const remainingSeconds = Math.floor(timeLeft / 1000);
-    const mins = Math.floor(remainingSeconds / 60);
-    const secs = remainingSeconds % 60;
+    useEffect(() => {
+        const calculateTime = () => {
+            if (!estimatedCompletionTime) {
+                setTimeLeft(0);
+                return;
+            }
+            const end = new Date(estimatedCompletionTime).getTime();
+            const now = new Date().getTime();
+            const diff = Math.max(0, Math.floor((end - now) / 1000));
+            setTimeLeft(diff);
+        };
+
+        calculateTime();
+        const interval = setInterval(calculateTime, 1000);
+        return () => clearInterval(interval);
+    }, [estimatedCompletionTime]);
+
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
 
     return (
-        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-black text-xl tabular-nums ${remainingSeconds <= 0 ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-900 text-white'}`}>
-            <Clock size={18} className={remainingSeconds > 0 ? 'animate-pulse' : ''} />
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-black text-xl tabular-nums ${timeLeft === 0 ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-900 text-white'}`}>
+            <Clock size={18} className={timeLeft > 0 ? 'animate-pulse' : ''} />
             {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
         </div>
     );
@@ -45,12 +59,6 @@ export default function AdminDashboard() {
     const [showPrepTime, setShowPrepTime] = useState(false);
     const [audioEnabled, setAudioEnabled] = useState(false);
     const socketRef = useRef(null);
-    const [currentTime, setCurrentTime] = useState(Date.now());
-
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, []);
 
     const fetchOrders = React.useCallback(async (isInitialLoad = false) => {
         if (isInitialLoad) {
@@ -450,7 +458,7 @@ export default function AdminDashboard() {
                                                 <>
                                                     <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Time Left</p>
-                                                        <CountdownTimer estimatedCompletionTime={order.estimatedCompletionTime} currentTime={currentTime} />
+                                                        <CountdownTimer estimatedCompletionTime={order.estimatedCompletionTime} />
                                                     </div>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order._id, 'READY'); }}

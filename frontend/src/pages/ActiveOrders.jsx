@@ -37,7 +37,7 @@ const CountdownHero = ({ order }) => {
             <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mb-16 blur-2xl" />
 
             <div className="relative z-10">
-                {order.status === 'READY' || (order.status === 'PREPARING' && timeLeft === 0) ? (
+                {order.status === 'READY' || (order.status === 'PREPARING' && remainingSeconds === 0) ? (
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ scale: [1, 1.05, 1], opacity: 1 }}
@@ -159,6 +159,12 @@ export default function ActiveOrders() {
     const [loading, setLoading] = useState(true);
     const [tokenNumber, setTokenNumber] = useState(null);
     const socketRef = useRef(null);
+    const [currentTime, setCurrentTime] = useState(Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -316,7 +322,7 @@ export default function ActiveOrders() {
                         ) : (
                             <div className="space-y-12">
                                 {liveOrders.map(order => (
-                                    <OrderCard key={order._id} order={order} currentTime={currentTime} />
+                                    <OrderCard key={order._id} order={order} />
                                 ))}
                             </div>
                         )}
