@@ -97,8 +97,8 @@ export default function CustomerLogin() {
                                     value={phone}
                                     onChange={handlePhoneChange}
                                     className={`w-full bg-white/5 border rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-white/25 focus:outline-none transition-all ${phoneError
-                                            ? 'border-red-500/50 focus:border-red-500/70'
-                                            : 'border-white/10 focus:border-blue-500/50'
+                                        ? 'border-red-500/50 focus:border-red-500/70'
+                                        : 'border-white/10 focus:border-blue-500/50'
                                         }`}
                                 />
                             </div>
@@ -113,7 +113,7 @@ export default function CustomerLogin() {
                             className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-sm font-semibold hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 shadow-lg shadow-blue-600/30 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             {loading
-                                ? <><Loader2 size={16} className="animate-spin" /> Please wait...</>
+                                ? <><Loader2 size={16} className="animate-spin" /> Please wait — server waking up...</>
                                 : <>Continue <ArrowRight size={16} /></>
                             }
                         </button>

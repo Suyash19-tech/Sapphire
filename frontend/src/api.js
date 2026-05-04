@@ -1,5 +1,21 @@
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
 
+// Fetch with timeout — shows a clear error instead of hanging forever
+// Render free tier can take 50s to wake up, so we use 60s timeout
+const fetchWithTimeout = (url, options = {}, timeoutMs = 60000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(url, { ...options, signal: controller.signal })
+        .then(res => { clearTimeout(timer); return res; })
+        .catch(err => {
+            clearTimeout(timer);
+            if (err.name === 'AbortError') {
+                throw new Error('Server is waking up — please try again in a few seconds.');
+            }
+            throw err;
+        });
+};
+
 export const signup = async (userData) => {
     try {
         const response = await fetch(`${BASE_URL}/auth/signup`, {
@@ -18,7 +34,7 @@ export const signup = async (userData) => {
 
 export const login = async (userData) => {
     try {
-        const response = await fetch(`${BASE_URL}/auth/login`, {
+        const response = await fetchWithTimeout(`${BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(userData),
@@ -35,7 +51,7 @@ export const login = async (userData) => {
 // Customer phone-based auth (login or register)
 export const customerAuth = async ({ name, phone }) => {
     try {
-        const response = await fetch(`${BASE_URL}/customers/auth`, {
+        const response = await fetchWithTimeout(`${BASE_URL}/customers/auth`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, phone }),

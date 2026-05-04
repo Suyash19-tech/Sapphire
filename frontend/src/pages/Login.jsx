@@ -98,7 +98,7 @@ export default function Login() {
                             className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 shadow-lg shadow-blue-600/30 disabled:opacity-50"
                         >
                             {loading
-                                ? <><Loader2 className="animate-spin" size={16} /> Signing in...</>
+                                ? <><Loader2 className="animate-spin" size={16} /> Signing in — may take ~30s on first load...</>
                                 : <>Sign In <ArrowRight size={16} /></>
                             }
                         </button>
