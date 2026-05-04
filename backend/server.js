@@ -63,12 +63,18 @@ const PORT = process.env.PORT || 5001;
 // Trust proxy for rate limiting on Render
 app.set('trust proxy', 1);
 
-// CORS Configuration to allow Vercel frontend and local development
+// CORS — origins from env, supports comma-separated list
+const allowedOrigins = (process.env.FRONTEND_URLS || 'http://localhost:5173')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
 const corsOptions = {
-    origin: [
-        'http://localhost:5173', // Vite dev server
-        'https://campus-craves.vercel.app' // Vercel deployment
-    ],
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, Postman)
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
     optionsSuccessStatus: 200
 };
@@ -91,7 +97,8 @@ app.use('/api/', limiter);
 
 // Performance & Logging
 app.use(compression()); // Gzip compression
-app.use(morgan('dev')); // Log requests
+// Use concise logging in production, verbose in dev
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Standard Middleware
 app.use(express.json());
@@ -143,14 +150,15 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/campuscra
     .then(async () => {
         console.log('Connected to MongoDB');
 
-        // Initialize Master Admin
+        // Initialize Master Admin from env vars
         try {
-            const adminEmail = '23cd3047@rgipt.ac.in';
+            const adminEmail = process.env.ADMIN_EMAIL || '23cd3047@rgipt.ac.in';
+            const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
             const existingAdmin = await User.findOne({ email: adminEmail });
 
             if (!existingAdmin) {
                 const salt = await bcrypt.genSalt(10);
-                const hashedPassword = await bcrypt.hash('admin', salt);
+                const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
                 const masterAdmin = new User({
                     name: 'Suyash (Admin)',
@@ -883,6 +891,34 @@ app.get('/api/analytics/summary', async (req, res) => {
         console.error('❌ [Analytics] Error:', err);
         res.status(500).json({ error: 'Failed to fetch analytics' });
     }
+});
+
+// ==================== GLOBAL ERROR HANDLERS ====================
+
+// Catch unhandled promise rejections (DB timeouts, etc.)
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [UnhandledRejection]', reason);
+    // Don't crash in production — log and continue
+});
+
+// Catch uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('❌ [UncaughtException]', err);
+    if (process.env.NODE_ENV === 'production') {
+        // Give in-flight requests 5s to finish, then exit cleanly
+        setTimeout(() => process.exit(1), 5000);
+    }
+});
+
+// Express global error middleware — catches errors thrown in route handlers
+app.use((err, req, res, next) => {
+    console.error('❌ [Express Error]', err.message, err.stack);
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({
+        error: process.env.NODE_ENV === 'production'
+            ? 'An unexpected error occurred'
+            : err.message,
+    });
 });
 
 // ==================== SCHEDULED ORDER PROCESSOR ====================
