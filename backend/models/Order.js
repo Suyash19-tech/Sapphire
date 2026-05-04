@@ -1,32 +1,43 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+    tableId: {
+        type: Number,
+        required: false, // Optional for non-table orders
+        index: true
+    },
+    sessionId: {
+        type: String,
+        required: false, // Generated for table orders
+        index: true
     },
     items: [{
         name: { type: String, required: true },
-        qty: { type: Number, required: true },
+        quantity: { type: Number, required: true },
         price: { type: Number, required: true }
     }],
     totalAmount: {
         type: Number,
         required: true
     },
+    customerName: {
+        type: String,
+        required: false,
+        default: 'Guest'
+    },
+    customerPhone: {
+        type: String,
+        required: false,
+        default: ''
+    },
     cookingInstructions: {
         type: String,
         default: ''
     },
-    paymentScreenshot: {
-        type: String, // Stores file path
-        required: true
-    },
     status: {
         type: String,
-        default: 'PENDING_VERIFICATION',
-        enum: ['PENDING_VERIFICATION', 'PREPARING', 'READY', 'COMPLETED', 'REJECTED'],
+        default: 'PENDING',
+        enum: ['PENDING', 'PREPARING', 'READY', 'SERVED', 'PAID'],
         index: true
     },
     estimatedTime: {

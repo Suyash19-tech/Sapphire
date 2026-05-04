@@ -1,20 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { getMenu, updateMenuItem, addMenuItem } from '../api';
+import { getMenu, updateMenuItem, addMenuItem, uploadMenuItemImage } from '../api';
 import {
-    ShoppingBag,
-    LayoutDashboard,
-    ChefHat,
-    Plus,
-    Edit2,
-    Save,
-    X,
-    ToggleLeft,
-    ToggleRight,
-    Search,
-    RefreshCw
+    ShoppingBag, LayoutDashboard, ChefHat, Plus, Edit2, Save,
+    X, ToggleLeft, ToggleRight, Search, RefreshCw, Grid3x3,
+    ImagePlus, Camera, Loader2
 } from 'lucide-react';
+
+const CATEGORIES = [
+    'Quick Snacks', 'Sandwich', 'Pizza & Burger', 'Chinese',
+    'North Indian', 'South Indian', 'Paratha', 'Pasta & Maggi', 'Beverages'
+];
+
+// Inline image upload button for each row
+const ImageUploadCell = ({ item, onUploaded }) => {
+    const [uploading, setUploading] = useState(false);
+    const inputRef = useRef(null);
+
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+            const updated = await uploadMenuItemImage(item._id, file);
+            onUploaded(updated);
+            toast.success('Image updated');
+        } catch {
+            toast.error('Failed to upload image');
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-2">
+            {/* Thumbnail */}
+            <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 shrink-0 flex items-center justify-center">
+                {item.image
+                    ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    : <span className="text-lg">🍽️</span>
+                }
+            </div>
+            {/* Upload button */}
+            <button
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                title="Upload image"
+            >
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+            </button>
+            <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        </div>
+    );
+};
 
 export default function Kitchen() {
     const navigate = useNavigate();
@@ -25,6 +66,10 @@ export default function Kitchen() {
     const [editPrice, setEditPrice] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Quick Snacks', popular: false });
+    const [newItemImage, setNewItemImage] = useState(null);
+    const [newItemImagePreview, setNewItemImagePreview] = useState(null);
+    const [addingItem, setAddingItem] = useState(false);
+    const imageInputRef = useRef(null);
 
     const fetchMenuData = async () => {
         try {
@@ -37,52 +82,62 @@ export default function Kitchen() {
         }
     };
 
-    useEffect(() => {
-        fetchMenuData();
-    }, []);
+    useEffect(() => { fetchMenuData(); }, []);
 
     const handleToggleAvailability = async (item) => {
         try {
             await updateMenuItem(item._id, { isAvailable: !item.isAvailable });
-            toast.success('Availability updated!');
-            fetchMenuData();
-        } catch (error) {
+            setMenu(prev => prev.map(m => m._id === item._id ? { ...m, isAvailable: !m.isAvailable } : m));
+            toast.success(`${item.name} ${!item.isAvailable ? 'enabled' : 'disabled'}`);
+        } catch {
             toast.error('Failed to update availability');
         }
-    };
-
-    const handleStartEdit = (item) => {
-        setEditingId(item._id);
-        setEditPrice(item.price);
     };
 
     const handleSavePrice = async (id) => {
         try {
             await updateMenuItem(id, { price: Number(editPrice) });
-            toast.success('Price updated!');
+            setMenu(prev => prev.map(m => m._id === id ? { ...m, price: Number(editPrice) } : m));
+            toast.success('Price updated');
             setEditingId(null);
-            fetchMenuData();
-        } catch (error) {
+        } catch {
             toast.error('Failed to update price');
         }
     };
 
+    const handleImageSelected = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setNewItemImage(file);
+        setNewItemImagePreview(URL.createObjectURL(file));
+    };
+
     const handleAddItem = async (e) => {
         e.preventDefault();
+        setAddingItem(true);
         try {
-            const itemToSave = {
-                ...newItem,
-                price: Number(newItem.price)
-            };
-            await addMenuItem(itemToSave);
-            toast.success('New item added!');
+            const saved = await addMenuItem({ ...newItem, price: Number(newItem.price) });
+            // Upload image if selected
+            if (newItemImage) {
+                const withImage = await uploadMenuItemImage(saved._id, newItemImage);
+                setMenu(prev => [withImage, ...prev]);
+            } else {
+                setMenu(prev => [saved, ...prev]);
+            }
+            toast.success(`${saved.name} added to menu`);
             setShowAddModal(false);
             setNewItem({ name: '', price: '', category: 'Quick Snacks', popular: false });
-            fetchMenuData();
+            setNewItemImage(null);
+            setNewItemImagePreview(null);
         } catch (error) {
-            console.error('Add item error:', error);
-            toast.error('Failed to add item. Check if the name already exists.');
+            toast.error('Failed to add item. Name may already exist.');
+        } finally {
+            setAddingItem(false);
         }
+    };
+
+    const handleImageUploaded = (updatedItem) => {
+        setMenu(prev => prev.map(m => m._id === updatedItem._id ? updatedItem : m));
     };
 
     const filteredMenu = menu.filter(item =>
@@ -92,121 +147,114 @@ export default function Kitchen() {
 
     return (
         <div className="flex h-screen bg-slate-50 font-sans antialiased overflow-hidden">
-            {/* Sidebar (Same as Admin) */}
-            <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden lg:flex">
-                <div className="p-8">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-orange-500 p-2 rounded-xl shadow-lg shadow-orange-200">
-                            <ShoppingBag className="text-white w-5 h-5" />
+            {/* Sidebar */}
+            <aside className="w-60 bg-white border-r border-slate-200 flex-col hidden lg:flex shrink-0">
+                <div className="px-5 py-6 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                        <div className="bg-blue-600 p-1.5 rounded-lg">
+                            <ShoppingBag className="text-white w-4 h-4" />
                         </div>
-                        <span className="font-black text-xl tracking-tight text-slate-800">CampusCraves</span>
+                        <span className="font-bold text-base text-slate-900">Sapphire</span>
                     </div>
                 </div>
-                <nav className="flex-1 px-4 space-y-1">
-                    <button onClick={() => navigate('/admin')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-bold text-sm transition-all">
-                        <LayoutDashboard size={20} /> Dashboard
+                <nav className="flex-1 px-3 py-4 space-y-0.5">
+                    <button onClick={() => navigate('/admin')} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors">
+                        <LayoutDashboard size={17} /> Dashboard
                     </button>
-                    <button onClick={() => navigate('/kitchen')} className="w-full flex items-center gap-3 px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 transition-all">
-                        <ChefHat size={20} /> Kitchen Management
+                    <button className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                        <ChefHat size={17} /> Menu Management
+                    </button>
+                    <button onClick={() => navigate('/tables')} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors">
+                        <Grid3x3 size={17} /> Tables
                     </button>
                 </nav>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0">
+            {/* Main */}
+            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+                <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
                     <div>
-                        <h1 className="text-xl font-black text-slate-900 tracking-tight">Kitchen Management</h1>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Update Menu Availability & Prices</p>
+                        <h1 className="text-base font-semibold text-slate-900">Menu Management</h1>
+                        <p className="text-xs text-slate-400 mt-0.5">Manage items, prices, availability & images</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search menu..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="bg-slate-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium w-64 focus:ring-2 focus:ring-slate-200 transition-all"
-                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                            <input type="text" placeholder="Search..." value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="bg-slate-50 border border-slate-200 rounded-lg py-2 pl-9 pr-4 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all" />
                         </div>
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="bg-orange-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-orange-100 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
-                        >
-                            <Plus size={18} /> Add New Item
+                        <button onClick={() => setShowAddModal(true)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1.5">
+                            <Plus size={16} /> Add Item
                         </button>
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-8">
+                <div className="flex-1 overflow-y-auto p-6">
                     {loading ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                            <RefreshCw size={48} className="animate-spin mb-4" />
-                            <p className="font-bold">Loading kitchen menu...</p>
+                        <div className="h-full flex items-center justify-center">
+                            <RefreshCw size={28} className="animate-spin text-slate-300" />
                         </div>
                     ) : (
-                        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-                            <table className="w-full text-left border-collapse">
+                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <table className="w-full text-left">
                                 <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-100">
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Item Name</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Price</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Availability</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Item</th>
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Image</th>
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Category</th>
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Price</th>
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">Status</th>
+                                        <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Edit</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {filteredMenu.map((item) => (
-                                        <tr key={item._id} className={`hover:bg-slate-50/50 transition-colors ${!item.isAvailable ? 'opacity-60' : ''}`}>
-                                            <td className="px-8 py-5">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xl">
-                                                        {item.name.includes('Samosa') ? '🥟' : item.name.includes('Burger') ? '🍔' : '🍲'}
-                                                    </div>
-                                                    <span className="font-bold text-slate-900">{item.name}</span>
-                                                    {item.popular && <span className="bg-orange-100 text-orange-600 text-[8px] font-black px-2 py-0.5 rounded-full uppercase">Popular</span>}
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredMenu.map(item => (
+                                        <tr key={item._id} className={`hover:bg-slate-50/50 transition-colors ${!item.isAvailable ? 'opacity-50' : ''}`}>
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-slate-900 text-sm">{item.name}</span>
+                                                    {item.popular && <span className="bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 rounded">Popular</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-5 text-sm font-medium text-slate-500">{item.category}</td>
-                                            <td className="px-8 py-5">
+                                            <td className="px-5 py-4">
+                                                <ImageUploadCell item={item} onUploaded={handleImageUploaded} />
+                                            </td>
+                                            <td className="px-5 py-4 text-sm text-slate-500">{item.category}</td>
+                                            <td className="px-5 py-4">
                                                 {editingId === item._id ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-black text-slate-900 text-sm">₹</span>
-                                                        <input
-                                                            type="number"
-                                                            value={editPrice}
-                                                            onChange={(e) => setEditPrice(e.target.value)}
-                                                            className="w-20 bg-slate-50 border border-slate-200 rounded-lg py-1 px-2 text-sm font-black text-slate-900 focus:ring-2 focus:ring-orange-500/20"
-                                                        />
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-sm text-slate-500">₹</span>
+                                                        <input type="number" value={editPrice}
+                                                            onChange={e => setEditPrice(e.target.value)}
+                                                            className="w-20 border border-slate-200 rounded-lg py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                                                     </div>
                                                 ) : (
-                                                    <span className="font-black text-slate-900">₹{item.price}</span>
+                                                    <span className="text-sm font-semibold text-slate-900">₹{item.price}</span>
                                                 )}
                                             </td>
-                                            <td className="px-8 py-5">
+                                            <td className="px-5 py-4">
                                                 <div className="flex justify-center">
-                                                    <button
-                                                        onClick={() => handleToggleAvailability(item)}
-                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest transition-all ${item.isAvailable
-                                                                ? 'bg-green-50 text-green-600 hover:bg-green-100'
+                                                    <button onClick={() => handleToggleAvailability(item)}
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${item.isAvailable
+                                                                ? 'bg-green-50 text-green-700 hover:bg-green-100'
                                                                 : 'bg-red-50 text-red-600 hover:bg-red-100'
-                                                            }`}
-                                                    >
-                                                        {item.isAvailable ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                                                            }`}>
+                                                        {item.isAvailable ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
                                                         {item.isAvailable ? 'In Stock' : 'Out of Stock'}
                                                     </button>
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-5 text-right">
+                                            <td className="px-5 py-4 text-right">
                                                 {editingId === item._id ? (
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => handleSavePrice(item._id)} className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all"><Save size={16} /></button>
-                                                        <button onClick={() => setEditingId(null)} className="p-2 bg-slate-100 text-slate-400 rounded-lg hover:bg-slate-200 transition-all"><X size={16} /></button>
+                                                    <div className="flex justify-end gap-1.5">
+                                                        <button onClick={() => handleSavePrice(item._id)} className="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"><Save size={14} /></button>
+                                                        <button onClick={() => setEditingId(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"><X size={14} /></button>
                                                     </div>
                                                 ) : (
-                                                    <button onClick={() => handleStartEdit(item)} className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-orange-500 hover:text-white transition-all"><Edit2 size={16} /></button>
+                                                    <button onClick={() => { setEditingId(item._id); setEditPrice(item.price); }}
+                                                        className="p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"><Edit2 size={14} /></button>
                                                 )}
                                             </td>
                                         </tr>
@@ -220,70 +268,79 @@ export default function Kitchen() {
 
             {/* Add Item Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 duration-300">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Add Menu Item</h2>
-                            <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-50 rounded-xl transition-all"><X size={20} /></button>
+                <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-md rounded-xl shadow-xl border border-slate-200 p-6">
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-base font-semibold text-slate-900">Add Menu Item</h2>
+                            <button onClick={() => { setShowAddModal(false); setNewItemImage(null); setNewItemImagePreview(null); }}
+                                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500"><X size={18} /></button>
                         </div>
-                        <form onSubmit={handleAddItem} className="space-y-5">
+
+                        <form onSubmit={handleAddItem} className="space-y-4">
+                            {/* Image upload area */}
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Name</label>
-                                <input
-                                    required
-                                    type="text"
-                                    placeholder="e.g. Masala Dosa"
-                                    className="w-full mt-1 bg-slate-50 border-none rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-orange-500/20"
-                                    value={newItem.name}
-                                    onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                                />
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Photo (optional)</label>
+                                <div
+                                    onClick={() => imageInputRef.current?.click()}
+                                    className={`mt-1.5 w-full h-32 rounded-xl border-2 border-dashed cursor-pointer flex flex-col items-center justify-center transition-colors ${newItemImagePreview
+                                            ? 'border-blue-300 bg-blue-50'
+                                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    {newItemImagePreview ? (
+                                        <div className="relative w-full h-full">
+                                            <img src={newItemImagePreview} alt="preview" className="w-full h-full object-cover rounded-xl" />
+                                            <div className="absolute inset-0 bg-black/30 rounded-xl flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                                <span className="text-white text-xs font-medium">Change photo</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <ImagePlus size={24} className="text-slate-300 mb-2" />
+                                            <p className="text-xs text-slate-400">Click to upload a photo</p>
+                                            <p className="text-xs text-slate-300 mt-0.5">JPG, PNG up to 10MB</p>
+                                        </>
+                                    )}
+                                </div>
+                                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+
+                            {/* Name */}
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Item Name</label>
+                                <input required type="text" placeholder="e.g. Masala Dosa"
+                                    className="w-full mt-1.5 border border-slate-200 rounded-lg py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                                    value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} />
+                            </div>
+
+                            {/* Price + Category */}
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Price (₹)</label>
-                                    <input
-                                        required
-                                        type="number"
-                                        placeholder="0"
-                                        className="w-full mt-1 bg-slate-50 border-none rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-orange-500/20"
-                                        value={newItem.price}
-                                        onChange={e => setNewItem({ ...newItem, price: e.target.value })}
-                                    />
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Price (₹)</label>
+                                    <input required type="number" placeholder="0"
+                                        className="w-full mt-1.5 border border-slate-200 rounded-lg py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                                        value={newItem.price} onChange={e => setNewItem({ ...newItem, price: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category</label>
-                                    <select
-                                        className="w-full mt-1 bg-slate-50 border-none rounded-2xl py-3.5 px-5 text-sm font-medium focus:ring-2 focus:ring-orange-500/20"
-                                        value={newItem.category}
-                                        onChange={e => setNewItem({ ...newItem, category: e.target.value })}
-                                    >
-                                        <option>Quick Snacks</option>
-                                        <option>Sandwich</option>
-                                        <option>Pizza & Burger</option>
-                                        <option>Chinese</option>
-                                        <option>North Indian</option>
-                                        <option>South Indian</option>
-                                        <option>Paratha</option>
-                                        <option>Pasta & Maggi</option>
-                                        <option>Beverages</option>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Category</label>
+                                    <select className="w-full mt-1.5 border border-slate-200 rounded-lg py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                                        value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })}>
+                                        {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                                     </select>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 py-2">
-                                <input
-                                    type="checkbox"
-                                    id="popular"
-                                    checked={newItem.popular}
+
+                            {/* Popular */}
+                            <label className="flex items-center gap-2.5 cursor-pointer">
+                                <input type="checkbox" checked={newItem.popular}
                                     onChange={e => setNewItem({ ...newItem, popular: e.target.checked })}
-                                    className="w-5 h-5 rounded-lg border-slate-200 text-orange-500 focus:ring-orange-500/20"
-                                />
-                                <label htmlFor="popular" className="text-sm font-bold text-slate-700">Mark as Popular</label>
-                            </div>
-                            <button
-                                type="submit"
-                                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm shadow-xl hover:bg-orange-600 transition-all active:scale-95 mt-4"
-                            >
-                                Create Menu Item
+                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20" />
+                                <span className="text-sm text-slate-700">Mark as Popular</span>
+                            </label>
+
+                            <button type="submit" disabled={addingItem}
+                                className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {addingItem ? <><Loader2 size={15} className="animate-spin" /> Adding...</> : 'Add to Menu'}
                             </button>
                         </form>
                     </div>

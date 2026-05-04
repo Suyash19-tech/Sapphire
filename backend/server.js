@@ -10,11 +10,11 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const Order = require('./models/Order');
 const MenuItem = require('./models/MenuItem');
 const User = require('./models/User');
+const TableSession = require('./models/TableSession');
+const Table = require('./models/Table');
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -28,7 +28,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, { cors: { origin: '*' } });
 app.set('io', io);
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Trust proxy for rate limiting on Render
 app.set('trust proxy', 1);
@@ -66,42 +66,47 @@ app.use(morgan('dev')); // Log requests
 // Standard Middleware
 app.use(express.json());
 
-// Cloudinary Configuration
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Local disk storage for uploaded images
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!require('fs').existsSync(uploadsDir)) {
+    require('fs').mkdirSync(uploadsDir, { recursive: true });
+}
 
-// Multer Storage Configuration (Cloudinary)
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'CampusCraves',
-        resource_type: 'auto',
-        // removed allowed_formats to be more flexible
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+        cb(null, uniqueName);
     }
 });
 
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    fileFilter: (req, file, cb) => {
+        const allowed = /jpeg|jpg|png|gif|webp/;
+        const ok = allowed.test(path.extname(file.originalname).toLowerCase()) &&
+            allowed.test(file.mimetype);
+        if (ok) cb(null, true);
+        else cb(new Error('Only image files are allowed'));
+    }
 });
 
-// Wrapper to catch Multer errors specifically
+// Serve uploaded images statically
+app.use('/uploads', express.static(uploadsDir));
+
+// Wrapper to catch Multer errors
 const uploadMiddleware = (req, res, next) => {
-    console.log('Incoming file upload request...');
     const uploadSingle = upload.single('paymentScreenshot');
     uploadSingle(req, res, function (err) {
         if (err instanceof multer.MulterError) {
             console.error('Multer Error:', err);
             return res.status(400).json({ error: 'File upload error', details: err.message });
         } else if (err) {
-            console.error('Cloudinary/Upload Error Details:', JSON.stringify(err, null, 2));
-            console.error('Unknown Upload Error:', err);
-            return res.status(500).json({ error: 'Unknown file upload error', details: err.message || err.toString() });
+            console.error('Upload Error:', err.message);
+            return res.status(500).json({ error: 'Upload failed', details: err.message });
         }
-        console.log('File upload successful:', req.file ? req.file.path : 'No file');
         next();
     });
 };
@@ -206,6 +211,36 @@ app.patch('/api/menu/:id', async (req, res) => {
     }
 });
 
+// Upload image for a menu item
+app.patch('/api/menu/:id/image', uploadMiddleware, async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Build the public URL for the uploaded file
+        const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
+        const imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+        const updatedItem = await MenuItem.findByIdAndUpdate(
+            req.params.id,
+            { image: imageUrl },
+            { returnDocument: 'after', new: true }
+        );
+
+        if (!updatedItem) {
+            return res.status(404).json({ error: 'Menu item not found' });
+        }
+
+        clearMenuCache();
+        console.log(`✅ [Menu Image] Updated image for ${updatedItem.name}: ${imageUrl}`);
+        res.json(updatedItem);
+    } catch (err) {
+        console.error('❌ [Menu Image] Error:', err);
+        res.status(500).json({ error: 'Failed to upload image' });
+    }
+});
+
 app.delete('/api/menu/:id', async (req, res) => {
     try {
         await MenuItem.findByIdAndDelete(req.params.id);
@@ -216,109 +251,535 @@ app.delete('/api/menu/:id', async (req, res) => {
     }
 });
 
-// Rate Limiting for specific sensitive routes
-const orderLimiter = rateLimit({
+// Rate Limiting for admin routes only
+const adminLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
-    limit: 5, // Limit each IP to 5 order creations per window
+    limit: 50, // Limit each IP to 50 admin actions per window
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: { error: 'Too many orders created from this IP, please try again after 10 minutes' }
+    message: { error: 'Too many admin actions from this IP, please try again after 10 minutes' }
 });
 
-// Create a new order (with screenshot upload)
-app.post('/api/orders', auth, orderLimiter, uploadMiddleware, async (req, res) => {
+// Helper function: Get or create session for a table
+async function getOrCreateTableSession(tableId) {
     try {
-        console.log('Order creation request body:', JSON.stringify(req.body, null, 2));
-        console.log('Order creation request file:', req.file ? JSON.stringify(req.file, null, 2) : 'No file');
+        let tableSession = await TableSession.findOne({ tableId });
 
-        if (!req.file) {
-            console.log('Warning: No file uploaded or Multer failed to process it.');
+        if (!tableSession) {
+            // Create new session for this table
+            const newSessionId = `session_${tableId}_${Date.now()}`;
+            tableSession = new TableSession({
+                tableId,
+                currentSessionId: newSessionId
+            });
+            await tableSession.save();
+            console.log(`🆕 [Session] Created new session for table ${tableId}: ${newSessionId}`);
         }
 
-        const { items, totalAmount, cookingInstructions } = req.body;
+        return tableSession.currentSessionId;
+    } catch (error) {
+        console.error('❌ [Session] Error getting/creating session:', error);
+        // Fallback: generate session ID without saving
+        return `session_${tableId}_${Date.now()}`;
+    }
+}
 
+// Helper function: Reset table session (called when all orders are PAID)
+async function resetTableSession(tableId) {
+    try {
+        const newSessionId = `session_${tableId}_${Date.now()}`;
+
+        await TableSession.findOneAndUpdate(
+            { tableId },
+            {
+                currentSessionId: newSessionId,
+                lastUpdated: new Date()
+            },
+            { upsert: true, new: true }
+        );
+
+        console.log(`🔄 [Session] Reset session for table ${tableId}: ${newSessionId}`);
+        return newSessionId;
+    } catch (error) {
+        console.error('❌ [Session] Error resetting session:', error);
+        return null;
+    }
+}
+
+// Create a new order (guest-friendly, no payment screenshot required)
+app.post('/api/orders', async (req, res) => {
+    try {
+        console.log('📝 [Order Creation] Request body:', JSON.stringify(req.body, null, 2));
+
+        const { items, totalAmount, cookingInstructions, tableId, customerName, customerPhone } = req.body;
+
+        // Parse items if sent as string
+        const parsedItems = typeof items === 'string' ? JSON.parse(items) : items;
+
+        // Convert tableId to Number if provided
+        const parsedTableId = tableId ? Number(tableId) : null;
+
+        // Validate required fields
+        if (!parsedItems || !Array.isArray(parsedItems) || parsedItems.length === 0) {
+            return res.status(400).json({ error: 'Items are required' });
+        }
+
+        if (!totalAmount || totalAmount <= 0) {
+            return res.status(400).json({ error: 'Valid total amount is required' });
+        }
+
+        // CHECK TABLE STATUS: Block order if table is blocked
+        if (parsedTableId) {
+            const table = await Table.findOne({ tableNumber: parsedTableId });
+            if (table && table.status === 'BLOCKED') {
+                console.log(`🚫 [Order Creation] Table ${parsedTableId} is BLOCKED`);
+                return res.status(403).json({
+                    error: 'Table unavailable',
+                    message: 'This table is currently unavailable. Please contact staff.'
+                });
+            }
+        }
+
+        // Get or create session for table orders
+        let sessionId = null;
+        if (parsedTableId) {
+            sessionId = await getOrCreateTableSession(parsedTableId);
+        }
+
+        // NO AUTO-MERGE: Always create new PENDING order
+        // Merging will happen when admin accepts the order
         const newOrder = new Order({
-            user: req.user.id,
-            items: JSON.parse(items), // Assuming items are sent as JSON string
+            tableId: parsedTableId,
+            sessionId: sessionId,
+            items: parsedItems,
             totalAmount,
-            cookingInstructions,
-            paymentScreenshot: req.file ? req.file.path : null,
+            cookingInstructions: cookingInstructions || '',
+            customerName: customerName || 'Guest',
+            customerPhone: customerPhone || '',
+            status: 'PENDING'
         });
 
         const savedOrder = await newOrder.save();
-        const populatedOrder = await Order.findById(savedOrder._id).populate('user', 'name phone tokenNumber');
-        req.app.get('io').emit('admin_newOrder', populatedOrder);
+        console.log('✅ [Order Creation] New PENDING order created:', savedOrder._id, 'for table:', parsedTableId, 'session:', sessionId);
+
+        // Update table stats
+        if (parsedTableId) {
+            await Table.findOneAndUpdate(
+                { tableNumber: parsedTableId },
+                {
+                    $inc: { totalOrders: 1 },
+                    $set: { lastOrderAt: new Date() }
+                },
+                { upsert: true }
+            );
+        }
+
+        // Emit to admin dashboard
+        req.app.get('io').emit('admin_newOrder', savedOrder);
+
         res.status(201).json(savedOrder);
     } catch (err) {
-        console.error('Error creating order details:', err);
-        console.error('Error message:', err.message);
-        console.error('Error stack:', err.stack);
-        if (err.name === 'ValidationError') {
-            console.error('Validation errors:', Object.values(err.errors).map(e => e.message));
-        }
+        console.error('❌ [Order Creation] Error:', err);
         res.status(500).json({ error: 'Failed to create order', details: err.message });
     }
 });
 
-// Get all active orders (not completed or rejected)
+// Get all active orders (status != PAID)
 app.get('/api/orders/active', async (req, res) => {
     try {
         const orders = await Order.find({
-            status: { $nin: ['COMPLETED', 'REJECTED'] }
-        }).populate('user', 'name phone tokenNumber').sort({ createdAt: -1 });
+            status: { $ne: 'PAID' }
+        }).sort({ createdAt: -1 });
+
+        console.log(`📋 [Active Orders] Found ${orders.length} active orders`);
         res.json(orders);
     } catch (err) {
+        console.error('❌ [Active Orders] Error:', err);
         res.status(500).json({ error: 'Failed to fetch active orders' });
     }
 });
 
-// Get all orders
+// Get all orders (with table filtering for users)
 app.get('/api/orders', async (req, res) => {
     try {
-        const orders = await Order.find().populate('user', 'name phone tokenNumber').sort({ createdAt: -1 });
+        const { tableId } = req.query;
+
+        let query = {};
+
+        if (tableId) {
+            // USER VIEW: Filter by table, current session, and exclude PAID orders
+            const parsedTableId = Number(tableId);
+
+            // Get current session for this table
+            const tableSession = await TableSession.findOne({ tableId: parsedTableId });
+
+            if (tableSession) {
+                query.tableId = parsedTableId;
+                query.sessionId = tableSession.currentSessionId;
+                query.status = { $ne: 'PAID' }; // Exclude paid orders for user view
+                console.log(`📋 [Orders - User] Fetching orders for table: ${parsedTableId}, session: ${tableSession.currentSessionId}`);
+            } else {
+                // No session exists yet, return empty array
+                console.log(`📋 [Orders - User] No session found for table: ${parsedTableId}`);
+                return res.json([]);
+            }
+        } else {
+            // ADMIN VIEW: Return all orders (no filtering)
+            console.log(`📋 [Orders - Admin] Fetching all orders`);
+        }
+
+        const orders = await Order.find(query).sort({ createdAt: -1 });
+        console.log(`✅ [Orders] Found ${orders.length} orders`);
         res.json(orders);
     } catch (err) {
+        console.error('❌ [Orders] Error:', err);
         res.status(500).json({ error: 'Failed to fetch orders' });
     }
 });
 
-// Get user's own orders
+// Get user's own orders (optional - for logged-in users)
 app.get('/api/orders/my-orders', auth, async (req, res) => {
     try {
-        console.log('Fetching orders for user:', req.user.id);
-        const orders = await Order.find({ user: req.user.id })
-            .populate('user', 'name phone tokenNumber')
-            .sort({ createdAt: -1 });
+        console.log('📋 [My Orders] Fetching orders for user:', req.user.id);
+        const orders = await Order.find({ user: req.user.id }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (err) {
+        console.error('❌ [My Orders] Error:', err);
         res.status(500).json({ error: 'Failed to fetch your orders' });
     }
 });
 
-// Update order status (with optional extra fields)
+// ─── Helper: merge items arrays ───────────────────────────────────────────────
+function mergeItems(baseItems, newItems) {
+    const merged = baseItems.map(i => ({ ...i.toObject ? i.toObject() : i }));
+    for (const ni of newItems) {
+        const idx = merged.findIndex(i => i.name === ni.name && i.price === ni.price);
+        if (idx >= 0) {
+            merged[idx].quantity += ni.quantity;
+        } else {
+            merged.push({ name: ni.name, price: ni.price, quantity: ni.quantity });
+        }
+    }
+    return merged;
+}
+
+function calcTotal(items) {
+    return items.reduce((s, i) => s + i.price * i.quantity, 0);
+}
+
+// Update order status with validation
 app.patch('/api/orders/:id/status', async (req, res) => {
     try {
-        const { status, estimatedTime, prepTime } = req.body;
-        const updateData = { status };
+        const { status, prepTime } = req.body;
+        const io = req.app.get('io');
 
-        if (estimatedTime !== undefined) {
-            updateData.estimatedTime = estimatedTime;
+        const validStatuses = ['PENDING', 'PREPARING', 'READY', 'SERVED', 'PAID', 'REJECTED'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
         }
 
-        if (status === 'PREPARING' && prepTime !== undefined) {
-            updateData.estimatedTime = prepTime;
-            updateData.estimatedCompletionTime = new Date(Date.now() + prepTime * 60000);
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        console.log(`📝 [Status] ${order.status} → ${status}  order=${order._id}  table=${order.tableId}`);
+
+        // ── RULE: REJECT (PENDING only) ────────────────────────────────────────
+        if (status === 'REJECTED') {
+            if (order.status !== 'PENDING') {
+                return res.status(400).json({ error: 'Only PENDING orders can be rejected' });
+            }
+            await Order.findByIdAndDelete(order._id);
+            io.emit('order_deleted', order._id.toString());
+            io.emit('user_orderUpdated', { _id: order._id, status: 'REJECTED', deleted: true });
+            console.log(`❌ [Reject] Order ${order._id} deleted`);
+            return res.json({ rejected: true, orderId: order._id });
         }
 
-        const updatedOrder = await Order.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { returnDocument: 'after' }
-        ).populate('user', 'name phone tokenNumber');
-        req.app.get('io').emit('user_orderUpdated', updatedOrder);
-        res.json(updatedOrder);
+        // ── RULE: ACCEPT (PENDING → PREPARING) ────────────────────────────────
+        // Merge ONLY into an existing PREPARING order whose timer is still running.
+        // If the existing order is READY (timer done, waiting for pickup) → do NOT merge.
+        // Create a fresh PREPARING entry for the new items instead.
+        if (status === 'PREPARING' && order.status === 'PENDING') {
+            const { tableId, sessionId } = order;
+
+            // Only merge into PREPARING orders with time still remaining
+            const preparingOrder = await Order.findOne({
+                tableId, sessionId, status: 'PREPARING', _id: { $ne: order._id }
+            }).sort({ createdAt: 1 });
+
+            if (preparingOrder) {
+                // Check if timer is still running (has remaining time)
+                const now = Date.now();
+                const timeRemaining = preparingOrder.estimatedCompletionTime
+                    ? new Date(preparingOrder.estimatedCompletionTime).getTime() - now
+                    : 0;
+                const timerStillRunning = timeRemaining > 0;
+
+                if (timerStillRunning) {
+                    // Timer running → merge items and add prep time on top
+                    const mergedItems = mergeItems(preparingOrder.items, order.items);
+                    preparingOrder.items = mergedItems;
+                    preparingOrder.totalAmount = calcTotal(mergedItems);
+
+                    if (prepTime) {
+                        preparingOrder.estimatedTime = (preparingOrder.estimatedTime || 0) + prepTime;
+                        preparingOrder.estimatedCompletionTime = new Date(now + timeRemaining + prepTime * 60000);
+                        console.log(`   ⏱️  +${prepTime}m added on top of ${Math.ceil(timeRemaining / 60000)}m remaining`);
+                    }
+                    if (order.cookingInstructions) {
+                        preparingOrder.cookingInstructions = preparingOrder.cookingInstructions
+                            ? `${preparingOrder.cookingInstructions}; ${order.cookingInstructions}`
+                            : order.cookingInstructions;
+                    }
+                    await preparingOrder.save();
+                    await Order.findByIdAndDelete(order._id);
+
+                    io.emit('user_orderUpdated', preparingOrder);
+                    io.emit('order_deleted', order._id.toString());
+                    console.log(`✅ [Merge→PREPARING] ${order._id} merged into ${preparingOrder._id}, ₹${preparingOrder.totalAmount}`);
+                    return res.json({ merged: true, order: preparingOrder, deletedOrderId: order._id });
+                }
+                // Timer expired on existing PREPARING order → fall through to create fresh PREPARING
+                console.log(`⏰ [No Merge] Existing PREPARING order timer expired — creating fresh PREPARING for new items`);
+            }
+
+            // No active PREPARING order (or timer expired) → move this order to PREPARING fresh
+            order.status = 'PREPARING';
+            if (prepTime) {
+                order.estimatedTime = prepTime;
+                order.estimatedCompletionTime = new Date(Date.now() + prepTime * 60000);
+            }
+            await order.save();
+            io.emit('user_orderUpdated', order);
+            console.log(`✅ [Accept] Order ${order._id} → PREPARING (fresh, no merge)`);
+            return res.json(order);
+        }
+
+        // ── RULE: MARK AS SERVED (READY → SERVED) ─────────────────────────────
+        // Merge into existing SERVED order for same table/session if one exists.
+        if (status === 'SERVED' && order.status === 'READY') {
+            const { tableId, sessionId } = order;
+
+            const servedOrder = await Order.findOne({
+                tableId, sessionId, status: 'SERVED', _id: { $ne: order._id }
+            }).sort({ createdAt: 1 });
+
+            if (servedOrder) {
+                const mergedItems = mergeItems(servedOrder.items, order.items);
+                servedOrder.items = mergedItems;
+                servedOrder.totalAmount = calcTotal(mergedItems);
+                if (order.cookingInstructions) {
+                    servedOrder.cookingInstructions = servedOrder.cookingInstructions
+                        ? `${servedOrder.cookingInstructions}; ${order.cookingInstructions}`
+                        : order.cookingInstructions;
+                }
+                await servedOrder.save();
+                await Order.findByIdAndDelete(order._id);
+
+                io.emit('user_orderUpdated', servedOrder);
+                io.emit('order_deleted', order._id.toString());
+                console.log(`✅ [Merge→SERVED] ${order._id} merged into ${servedOrder._id}, ₹${servedOrder.totalAmount}`);
+                return res.json({ merged: true, order: servedOrder, deletedOrderId: order._id });
+            }
+
+            // No existing SERVED order — move normally
+            order.status = 'SERVED';
+            await order.save();
+            io.emit('user_orderUpdated', order);
+            console.log(`✅ [Served] Order ${order._id} → SERVED`);
+            return res.json(order);
+        }
+
+        // ── RULE: MARK AS PAID ─────────────────────────────────────────────────
+        // Mark paid, then reset session so next customer starts fresh.
+        if (status === 'PAID') {
+            order.status = 'PAID';
+            await order.save();
+            io.emit('user_orderUpdated', order);
+            console.log(`✅ [Paid] Order ${order._id} → PAID`);
+
+            // Reset session — all future orders for this table get a new session
+            if (order.tableId && order.sessionId) {
+                const remaining = await Order.find({
+                    tableId: order.tableId,
+                    sessionId: order.sessionId,
+                    status: { $ne: 'PAID' }
+                });
+                if (remaining.length === 0) {
+                    await resetTableSession(order.tableId);
+                    console.log(`🔄 [Session] Reset for table ${order.tableId}`);
+                }
+            }
+            return res.json(order);
+        }
+
+        // ── ALL OTHER STATUS TRANSITIONS (PREPARING→READY, etc.) ──────────────
+        order.status = status;
+        await order.save();
+        io.emit('user_orderUpdated', order);
+        console.log(`✅ [Status] Order ${order._id} → ${status}`);
+        return res.json(order);
+
     } catch (err) {
+        console.error('❌ [Status Update] Error:', err);
         res.status(500).json({ error: 'Failed to update order' });
+    }
+});
+
+// Update order items (admin only)
+app.patch('/api/orders/:id/items', async (req, res) => {
+    try {
+        const { items } = req.body;
+
+        console.log(`📝 [Items Update] Updating items for order ${req.params.id}`);
+
+        // Get the order
+        const order = await Order.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        // Don't allow editing PAID orders
+        if (order.status === 'PAID') {
+            return res.status(400).json({ error: 'Cannot edit paid orders' });
+        }
+
+        // Validate items
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Items are required' });
+        }
+
+        // Calculate new total
+        const newTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        // Update order
+        order.items = items;
+        order.totalAmount = newTotal;
+        await order.save();
+
+        console.log(`✅ [Items Update] Order ${req.params.id} items updated`);
+        console.log(`   Total items: ${items.length}, New total: ₹${newTotal}`);
+
+        // Emit to connected clients
+        req.app.get('io').emit('user_orderUpdated', order);
+
+        res.json(order);
+    } catch (err) {
+        console.error('❌ [Items Update] Error:', err);
+        res.status(500).json({ error: 'Failed to update order items' });
+    }
+});
+
+// Delete an order completely (admin only — used when order has 0 items)
+app.delete('/api/orders/:id', async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        if (order.status === 'PAID') {
+            return res.status(400).json({ error: 'Cannot delete a paid order' });
+        }
+
+        await Order.findByIdAndDelete(req.params.id);
+
+        req.app.get('io').emit('order_deleted', req.params.id);
+        req.app.get('io').emit('user_orderUpdated', { _id: req.params.id, status: 'DELETED', deleted: true });
+
+        console.log(`🗑️  [Delete] Order ${req.params.id} deleted by admin`);
+        res.json({ deleted: true, orderId: req.params.id });
+    } catch (err) {
+        console.error('❌ [Delete Order] Error:', err);
+        res.status(500).json({ error: 'Failed to delete order' });
+    }
+});
+
+// ==================== TABLE MANAGEMENT ====================
+
+// Get all tables
+app.get('/api/tables', async (req, res) => {
+    try {
+        console.log('📋 [Tables] Fetching all tables');
+        const tables = await Table.find().sort({ tableNumber: 1 });
+
+        // If no tables exist, create default tables (1-20)
+        if (tables.length === 0) {
+            console.log('🆕 [Tables] No tables found, creating default tables');
+            const defaultTables = [];
+            for (let i = 1; i <= 20; i++) {
+                defaultTables.push({
+                    tableNumber: i,
+                    status: 'ACTIVE'
+                });
+            }
+            await Table.insertMany(defaultTables);
+            const newTables = await Table.find().sort({ tableNumber: 1 });
+            console.log(`✅ [Tables] Created ${newTables.length} default tables`);
+            return res.json(newTables);
+        }
+
+        console.log(`✅ [Tables] Found ${tables.length} tables`);
+        res.json(tables);
+    } catch (err) {
+        console.error('❌ [Tables] Error:', err);
+        res.status(500).json({ error: 'Failed to fetch tables' });
+    }
+});
+
+// Toggle table status (ACTIVE <-> BLOCKED)
+app.patch('/api/tables/:tableNumber/toggle', async (req, res) => {
+    try {
+        const tableNumber = Number(req.params.tableNumber);
+        console.log(`📝 [Table Toggle] Toggling status for table ${tableNumber}`);
+
+        let table = await Table.findOne({ tableNumber });
+
+        if (!table) {
+            // Create table if it doesn't exist
+            table = new Table({
+                tableNumber,
+                status: 'BLOCKED' // Default to blocked when manually toggling non-existent table
+            });
+            await table.save();
+            console.log(`🆕 [Table Toggle] Created new table ${tableNumber} with status BLOCKED`);
+        } else {
+            // Toggle status
+            table.status = table.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
+            await table.save();
+            console.log(`✅ [Table Toggle] Table ${tableNumber} status changed to ${table.status}`);
+        }
+
+        res.json(table);
+    } catch (err) {
+        console.error('❌ [Table Toggle] Error:', err);
+        res.status(500).json({ error: 'Failed to toggle table status' });
+    }
+});
+
+// Check if table is available (used before order creation)
+app.get('/api/tables/:tableNumber/status', async (req, res) => {
+    try {
+        const tableNumber = Number(req.params.tableNumber);
+        console.log(`🔍 [Table Status] Checking status for table ${tableNumber}`);
+
+        const table = await Table.findOne({ tableNumber });
+
+        // If table doesn't exist, it's available (will be created on first order)
+        if (!table) {
+            console.log(`✅ [Table Status] Table ${tableNumber} not found, assuming ACTIVE`);
+            return res.json({ tableNumber, status: 'ACTIVE', available: true });
+        }
+
+        const available = table.status === 'ACTIVE';
+        console.log(`✅ [Table Status] Table ${tableNumber} is ${table.status} (available: ${available})`);
+
+        res.json({
+            tableNumber: table.tableNumber,
+            status: table.status,
+            available
+        });
+    } catch (err) {
+        console.error('❌ [Table Status] Error:', err);
+        res.status(500).json({ error: 'Failed to check table status' });
     }
 });
 

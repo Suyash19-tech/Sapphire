@@ -7,6 +7,8 @@ import Checkout from './pages/Checkout';
 import ActiveOrders from './pages/ActiveOrders';
 import AdminDashboard from './pages/AdminDashboard';
 import Kitchen from './pages/Kitchen';
+import Tables from './pages/Tables';
+import InvalidTable from './pages/InvalidTable';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
@@ -21,6 +23,12 @@ const ProtectedRoute = ({ children }) => {
 const PublicRoute = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem('token');
   return isAuthenticated ? <Navigate to="/" replace /> : children;
+};
+
+// Optional Auth Route (works with or without authentication)
+const OptionalAuthRoute = ({ children }) => {
+  // Always render children, no authentication required
+  return children;
 };
 
 // Admin Route Component
@@ -61,7 +69,7 @@ function Dashboard() {
             <div className="bg-orange-500 p-2 rounded-xl shadow-lg shadow-orange-200">
               <ShoppingBag className="text-white w-5 h-5" />
             </div>
-            <span className="font-black text-xl tracking-tight text-slate-800">CampusCraves</span>
+            <span className="font-black text-xl tracking-tight text-slate-800">Sapphire</span>
           </div>
           <button
             onClick={() => navigate('/profile')}
@@ -75,9 +83,9 @@ function Dashboard() {
         <header className="px-6 py-8 relative z-10">
           <div className="space-y-1">
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-              {greeting}, {userName || 'Student'}! 👋
+              {greeting}, {userName || 'Guest'}! 👋
             </h2>
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">What's on your mind today?</p>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Welcome to Sapphire Restaurant</p>
           </div>
         </header>
 
@@ -118,8 +126,8 @@ function Dashboard() {
                 <Utensils className="text-orange-500 w-7 h-7 group-hover:text-white transition-colors duration-300" />
               </div>
               <div>
-                <span className="block font-bold text-slate-800 text-base">Order Food</span>
-                <span className="text-slate-400 text-xs mt-1">Freshly Prepared</span>
+                <span className="block font-bold text-slate-800 text-base">Explore Menu</span>
+                <span className="text-slate-400 text-xs mt-1">Prepared by Sapphire Kitchen</span>
               </div>
             </button>
 
@@ -131,8 +139,8 @@ function Dashboard() {
                 <Clock className="text-slate-500 w-7 h-7 group-hover:text-white transition-colors duration-300" />
               </div>
               <div>
-                <span className="block font-bold text-slate-800 text-base">Track Order</span>
-                <span className="text-slate-400 text-xs mt-1">Live Updates</span>
+                <span className="block font-bold text-slate-800 text-base">Track Your Order</span>
+                <span className="text-slate-400 text-xs mt-1">Live Kitchen Updates</span>
               </div>
             </button>
           </div>
@@ -182,11 +190,16 @@ export default function App() {
     <Router>
       <Toaster position="top-center" reverseOrder={false} />
       <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/menu" element={<ProtectedRoute><Menu /></ProtectedRoute>} />
-        <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-        <Route path="/orders" element={<ProtectedRoute><ActiveOrders /></ProtectedRoute>} />
+        {/* Redirect home to invalid table page */}
+        <Route path="/" element={<Navigate to="/invalid-table" replace />} />
+
+        {/* Guest Ordering Routes (No Auth Required) */}
+        <Route path="/menu" element={<OptionalAuthRoute><Menu /></OptionalAuthRoute>} />
+        <Route path="/checkout" element={<OptionalAuthRoute><Checkout /></OptionalAuthRoute>} />
+        <Route path="/orders" element={<OptionalAuthRoute><ActiveOrders /></OptionalAuthRoute>} />
+        <Route path="/invalid-table" element={<InvalidTable />} />
+
+        {/* Authenticated User Routes */}
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         {/* Public Routes (Auth) */}
@@ -196,6 +209,7 @@ export default function App() {
         {/* Admin/Kitchen Routes */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/kitchen" element={<AdminRoute><Kitchen /></AdminRoute>} />
+        <Route path="/tables" element={<AdminRoute><Tables /></AdminRoute>} />
       </Routes>
     </Router>
   );

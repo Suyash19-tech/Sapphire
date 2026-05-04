@@ -1,255 +1,155 @@
-
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Cloud, Camera, ShieldCheck, Smartphone, CheckCircle, Info, Utensils, Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ShieldCheck, Info, Loader2, Phone, User, CheckCircle, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { createOrder } from '../api';
+import { useCart } from '../context/CartContext';
+import { getTableId, validateTableId, buildTablePath } from '../utils/tableUtils';
 
 export default function Checkout() {
     const navigate = useNavigate();
-    const location = useLocation();
-    const { cartItems, totalPrice } = location.state || { cartItems: [], totalPrice: 0 };
+    const [searchParams] = useSearchParams();
+    const { cart: cartItems, getTotalPrice, clearCart } = useCart();
+    const totalPrice = getTotalPrice();
 
-    const [instructions, setInstructions] = useState('');
-    const [file, setFile] = useState(null);
-    const [dragActive, setDragActive] = useState(false);
+    const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [tableId, setTableId] = useState(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            navigate('/login');
-        }
-    }, [navigate]);
+        const currentTableId = getTableId(searchParams);
+        if (!validateTableId(currentTableId, navigate)) return;
+        setTableId(currentTableId);
+    }, [searchParams, navigate]);
 
-    const handleDrag = (e) => {
+    useEffect(() => {
+        if (cartItems.length === 0 && tableId) navigate(buildTablePath('/menu', tableId));
+    }, [cartItems, navigate, tableId]);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        if (e.type === 'dragenter' || e.type === 'dragover') {
-            setDragActive(true);
-        } else if (e.type === 'dragleave') {
-            setDragActive(false);
-        }
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragActive(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            setFile(e.dataTransfer.files[0]);
-        }
-    };
-
-    const handleFileInput = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
-        }
-    };
-
-    const handleSubmit = async () => {
-        if (!file) return;
+        if (!tableId) { toast.error('Table information missing'); return; }
 
         setIsSubmitting(true);
         try {
-            const items = cartItems.map(item => ({
-                name: item.name,
-                qty: item.quantity,
-                price: item.price
-            }));
-
-            const orderData = {
-                items,
-                totalAmount: totalPrice,
-                cookingInstructions: instructions,
-                paymentScreenshot: file
-            };
-
-            const response = await createOrder(orderData);
-            toast.success('Order placed successfully!');
-            navigate('/orders', { state: { orderId: response._id } });
+            await createOrder({
+                tableId: Number(tableId),
+                customerName: customerName.trim() || 'Guest',
+                customerPhone: customerPhone.trim() || '',
+                items: cartItems.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+                totalAmount: totalPrice
+            });
+            toast.success('Order placed!');
+            clearCart();
+            navigate(buildTablePath('/orders', tableId));
         } catch (error) {
-            console.error('Failed to create order:', error);
-            toast.error(error.message || 'Something went wrong. Please try again.');
+            toast.error(error.message || 'Failed to place order. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const isFileSelected = file !== null;
+    if (!tableId) return null;
+
+    const canSubmit = !isSubmitting;
 
     return (
-        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased overflow-x-hidden">
+        <main className="min-h-screen bg-[#0F172A] flex justify-center font-sans antialiased">
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden"
+                className="w-full max-w-md min-h-screen flex flex-col"
             >
-
                 {/* Header */}
-                <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
-                    <div className="px-6 py-6 flex items-center gap-4">
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-transform transform active:scale-90"
-                        >
-                            <ArrowLeft size={20} className="text-slate-800" />
-                        </button>
-                        <div>
-                            <h1 className="text-xl font-black text-slate-900 tracking-tight">Checkout</h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Order Total: ₹{totalPrice}</p>
-                        </div>
+                <header className="sticky top-0 z-10 bg-[#0F172A]/95 backdrop-blur-xl border-b border-white/5 px-5 py-4 flex items-center gap-3">
+                    <button onClick={() => navigate(buildTablePath('/menu', tableId))}
+                        className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-white/70">
+                        <ArrowLeft size={18} />
+                    </button>
+                    <div>
+                        <h1 className="text-lg font-bold text-white">Checkout</h1>
+                        <p className="text-xs text-white/40">Table {tableId} · ₹{totalPrice}</p>
                     </div>
                 </header>
 
-                {/* Content Scroll Area */}
-                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-8">
+                <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 pb-32">
 
-                    {/* Order Summary Summary */}
-                    <div className="bg-slate-50 rounded-[2rem] p-6 space-y-3">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Order Items</h3>
-                        {cartItems.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-sm px-2">
-                                <span className="font-bold text-slate-700">{item.name} x {item.quantity}</span>
-                                <span className="font-black text-slate-900">₹{item.price * item.quantity}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Payment Alert */}
-                    <div className="bg-orange-50 border border-orange-100 rounded-[2rem] p-6 flex gap-4">
-                        <div className="bg-orange-500 p-3 rounded-2xl h-fit shadow-lg shadow-orange-200">
-                            <Smartphone className="text-white" size={20} />
-                        </div>
-                        <div>
-                            <h3 className="text-orange-900 font-bold text-sm">Scan & Pay ₹{totalPrice}</h3>
-                            <p className="text-orange-700 text-xs mt-1 leading-relaxed opacity-80">
-                                Please pay exactly ₹{totalPrice} and upload the screenshot below.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Scan to Pay Section */}
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center px-2">
-                            <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Payment QR Code</h2>
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-green-500 bg-green-50 px-3 py-1 rounded-full">
-                                <ShieldCheck size={12} /> Secure
-                            </div>
-                        </div>
-
-                        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-xl shadow-slate-100 flex flex-col items-center group">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-orange-500 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity" />
-                                <div className="relative bg-white p-6 rounded-[2rem] shadow-inner border border-slate-50">
-                                    <div className="w-48 h-48 bg-slate-100 rounded-2xl flex items-center justify-center relative overflow-hidden">
-                                        {/* Mock QR Lines */}
-                                        <div className="absolute inset-4 border-2 border-slate-300 rounded-lg flex flex-col gap-2 p-4 opacity-30">
-                                            <div className="w-full h-2 bg-slate-400 rounded" />
-                                            <div className="w-3/4 h-2 bg-slate-400 rounded" />
-                                            <div className="w-full h-2 bg-slate-400 rounded" />
-                                            <div className="w-1/2 h-2 bg-slate-400 rounded" />
-                                        </div>
-                                        <div className="z-10 text-center">
-                                            <div className="text-4xl mb-2 grayscale group-hover:grayscale-0 transition-all duration-500">📸</div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scan Me</p>
-                                        </div>
+                    {/* Order Summary */}
+                    <section>
+                        <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">Your Order</p>
+                        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                            {cartItems.map((item, idx) => (
+                                <div key={idx} className={`flex items-center justify-between px-4 py-3.5 ${idx < cartItems.length - 1 ? 'border-b border-white/5' : ''}`}>
+                                    <div>
+                                        <p className="text-sm font-medium text-white">{item.name}</p>
+                                        <p className="text-xs text-white/40 mt-0.5">×{item.quantity} · ₹{item.price} each</p>
                                     </div>
+                                    <span className="text-sm font-bold text-white">₹{item.price * item.quantity}</span>
                                 </div>
-                            </div>
-                            <div className="mt-6 text-center space-y-1">
-                                <p className="text-slate-900 font-bold text-sm">Amity Gwalior Canteen</p>
-                                <p className="text-slate-400 text-[10px] font-medium tracking-wide">UPI ID: canteen@amity</p>
+                            ))}
+                            <div className="flex items-center justify-between px-4 py-3.5 bg-blue-600/10 border-t border-blue-500/20">
+                                <span className="text-sm font-semibold text-blue-300">Total</span>
+                                <span className="text-lg font-bold text-white">₹{totalPrice}</span>
                             </div>
                         </div>
+                    </section>
+
+                    {/* Info */}
+                    <div className="flex items-start gap-3 p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl">
+                        <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
+                        <p className="text-xs text-blue-300 leading-relaxed">
+                            No payment needed now. Your order goes straight to the Sapphire kitchen — pay at the table when you're done.
+                        </p>
                     </div>
 
-                    {/* Cooking Instructions */}
-                    <div className="space-y-4">
-                        <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Special Requests</h2>
-                        <div className="relative">
-                            <textarea
-                                value={instructions}
-                                onChange={(e) => setInstructions(e.target.value)}
-                                placeholder="Any specific cooking instructions? (e.g., extra spicy, no onion)"
-                                className="w-full px-6 py-5 bg-slate-50 border-none rounded-[2rem] text-slate-900 text-sm font-medium placeholder-slate-400 focus:ring-2 focus:ring-orange-500/20 transition-all resize-none h-32"
-                            />
+                    {/* Guest Details */}
+                    <section>
+                        <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">Your Details <span className="normal-case font-normal text-white/25">(optional)</span></p>
+                        <div className="space-y-3">
+                            <div className="relative">
+                                <User size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+                                <input
+                                    type="text"
+                                    value={customerName}
+                                    onChange={e => setCustomerName(e.target.value)}
+                                    placeholder="Your name (optional)"
+                                    className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
+                                />
+                            </div>
+                            <div className="relative">
+                                <Phone size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+                                <input
+                                    type="tel"
+                                    value={customerPhone}
+                                    onChange={e => setCustomerPhone(e.target.value)}
+                                    placeholder="Mobile number (optional)"
+                                    maxLength="10"
+                                    className="w-full pl-11 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
+                                />
+                            </div>
                         </div>
-                    </div>
-
-                    {/* File Upload Dropzone */}
-                    <div className="space-y-4 pb-12">
-                        <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Upload Proof</h2>
-                        <div
-                            onDragEnter={handleDrag}
-                            onDragLeave={handleDrag}
-                            onDragOver={handleDrag}
-                            onDrop={handleDrop}
-                            className={`relative border-2 border-dashed rounded-[2.5rem] p-10 transition-all duration-500 cursor-pointer overflow-hidden group ${dragActive
-                                ? 'border-orange-500 bg-orange-50 scale-[1.02]'
-                                : file
-                                    ? 'border-green-500 bg-green-50'
-                                    : 'border-slate-200 bg-slate-50 hover:border-orange-300 hover:bg-orange-50'
-                                }`}
-                        >
-                            <input
-                                type="file"
-                                onChange={handleFileInput}
-                                className="hidden"
-                                id="file-upload"
-                                accept="image/*"
-                            />
-                            <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer relative z-10">
-                                {file ? (
-                                    <>
-                                        <div className="w-16 h-16 bg-green-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-green-200 mb-4 animate-bounce-short">
-                                            <CheckCircle size={32} />
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{file.name}</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Proof Uploaded</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-100 mb-4 group-hover:scale-110 transition-transform duration-500">
-                                            <Cloud size={32} className="text-slate-400 group-hover:text-orange-500 transition-colors" />
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-900">Upload Screenshot</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 text-center leading-relaxed">
-                                            PNG, JPG or PDF <br /> (Max 10MB)
-                                        </p>
-                                    </>
-                                )}
-                            </label>
-                        </div>
-                    </div>
+                    </section>
                 </div>
 
-                {/* Sticky Footer Button */}
-                <div className="sticky bottom-0 px-6 py-8 bg-white/80 backdrop-blur-lg border-t border-slate-100">
+                {/* Sticky Footer */}
+                <div className="sticky bottom-0 bg-[#0F172A]/95 backdrop-blur-xl border-t border-white/5 px-5 py-4">
                     <button
                         onClick={handleSubmit}
-                        disabled={!isFileSelected || isSubmitting}
-                        className={`w-full py-5 rounded-[2rem] font-black text-base transition-transform transform duration-500 flex items-center justify-center gap-2 ${isFileSelected && !isSubmitting
-                            ? 'bg-slate-900 text-white shadow-2xl shadow-slate-300 hover:scale-[1.02] active:scale-95'
-                            : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                        disabled={!canSubmit}
+                        className={`w-full py-4 rounded-2xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${canSubmit
+                            ? 'bg-blue-600 text-white hover:bg-blue-500 active:scale-[0.98] shadow-xl shadow-blue-600/30'
+                            : 'bg-white/5 text-white/20 cursor-not-allowed border border-white/10'
                             }`}
                     >
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 size={20} className="animate-spin" />
-                                Processing...
-                            </>
-                        ) : isFileSelected ? (
-                            'Confirm Payment & Order'
-                        ) : (
-                            'Please Upload Proof'
-                        )}
+                        {isSubmitting
+                            ? <><Loader2 size={16} className="animate-spin" /> Placing Order...</>
+                            : <><CheckCircle size={16} /> Place Order <ChevronRight size={16} /></>
+                        }
                     </button>
-                    <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-4 flex items-center justify-center gap-2">
-                        <Info size={12} /> Verification takes ~1-2 mins
+                    <p className="text-center text-xs text-white/20 mt-2.5 flex items-center justify-center gap-1.5">
+                        <ShieldCheck size={12} /> Sapphire Restaurant
                     </p>
                 </div>
             </motion.div>

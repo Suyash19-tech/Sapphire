@@ -27,6 +27,10 @@ const menuItemSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    image: {
+        type: String,
+        default: null  // Cloudinary URL
+    },
     createdAt: {
         type: Date,
         default: Date.now

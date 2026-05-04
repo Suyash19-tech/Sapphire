@@ -1,148 +1,171 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Flame, ShoppingBag, Hash, Receipt } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { getMyOrders } from '../api';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle, ShoppingBag, Hash, Timer, Bell, ChefHat, Utensils, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getOrders } from '../api';
 import { io } from 'socket.io-client';
+import { getTableId, validateTableId, buildTablePath } from '../utils/tableUtils';
 
-const CountdownHero = ({ order, currentTime }) => {
+const STATUS_CONFIG = {
+    PENDING: { label: 'Order Received', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20', step: 0 },
+    PREPARING: { label: 'Preparing in Kitchen', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20', step: 1 },
+    READY: { label: 'Ready to Serve', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', step: 2 },
+    SERVED: { label: 'Served to Table', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20', step: 3 },
+};
+
+const CountdownBlock = ({ order, currentTime }) => {
     const timeLeft = (order.status === 'PREPARING' && order.estimatedCompletionTime)
         ? Math.max(0, new Date(order.estimatedCompletionTime).getTime() - currentTime)
         : 0;
-
     const remainingSeconds = Math.floor(timeLeft / 1000);
     const minutes = Math.floor(remainingSeconds / 60);
     const seconds = remainingSeconds % 60;
-    const totalTimeSeconds = (order.estimatedTime || 15) * 60;
-    const progress = totalTimeSeconds > 0 ? Math.min(100, (1 - (remainingSeconds / totalTimeSeconds)) * 100) : 0;
+    const totalSecs = (order.estimatedTime || 15) * 60;
+    const progress = totalSecs > 0 ? Math.min(100, (1 - remainingSeconds / totalSecs) * 100) : 100;
 
-    return (
-        <div className={`rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden text-center transition-all duration-500 ${order.status === 'READY' ? 'bg-green-500 shadow-green-200' : 'bg-slate-900 shadow-slate-300'}`}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mb-16 blur-2xl" />
-
-            <div className="relative z-10">
-                {order.status === 'READY' || (order.status === 'PREPARING' && remainingSeconds === 0) ? (
-                    <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: [1, 1.05, 1], opacity: 1 }}
-                        transition={{
-                            scale: { repeat: Infinity, duration: 2 },
-                            opacity: { duration: 0.5 }
-                        }}
-                    >
-                        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
-                            <CheckCircle2 size={32} className="text-white" />
-                        </div>
-                        <p className="text-[10px] font-black text-white/80 uppercase tracking-[0.2em] mb-1">Order Ready</p>
-                        <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Pick it up!</h2>
-                    </motion.div>
-                ) : (
-                    <>
-                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Estimated Ready In</p>
-                        <div className="text-5xl font-black text-white font-mono tracking-tighter mb-6 tabular-nums">
-                            {String(minutes).padStart(2, '0')}<span className="text-orange-500 animate-pulse">:</span>{String(seconds).padStart(2, '0')}
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden shadow-inner mb-1">
-                            <div
-                                className="bg-orange-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(249,115,22,0.6)]"
-                                style={{ width: `${progress}%` }}
-                            ></div>
-                        </div>
-                    </>
-                )}
+    if (order.status === 'PENDING') return (
+        <div className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl">
+            <div className="w-10 h-10 bg-slate-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <Timer size={18} className="text-slate-400" />
             </div>
+            <div>
+                <p className="text-sm font-semibold text-white">Awaiting confirmation</p>
+                <p className="text-xs text-white/40 mt-0.5">Sapphire kitchen will accept shortly</p>
+            </div>
+        </div>
+    );
+
+    if (order.status === 'READY') return (
+        <motion.div
+            initial={{ scale: 0.97 }} animate={{ scale: [1, 1.02, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+        >
+            <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <Bell size={18} className="text-amber-400" />
+            </div>
+            <div>
+                <p className="text-sm font-bold text-amber-300">Your order is ready!</p>
+                <p className="text-xs text-amber-400/70 mt-0.5">Please collect from the counter</p>
+            </div>
+        </motion.div>
+    );
+
+    if (order.status === 'SERVED') return (
+        <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+            <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center shrink-0">
+                <CheckCircle size={18} className="text-green-400" />
+            </div>
+            <div>
+                <p className="text-sm font-bold text-green-300">Served to your table</p>
+                <p className="text-xs text-green-400/70 mt-0.5">Enjoy your meal!</p>
+            </div>
+        </div>
+    );
+
+    // PREPARING
+    return (
+        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <ChefHat size={15} className="text-blue-400" />
+                    <span className="text-xs font-medium text-blue-300">Estimated ready in</span>
+                </div>
+                <span className="font-mono text-lg font-bold text-white tabular-nums">
+                    {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                </span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                <motion.div className="bg-blue-500 h-full rounded-full"
+                    initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: 1 }} />
+            </div>
+            <p className="text-xs text-blue-400/60 mt-1.5 text-right">{Math.round(progress)}% complete</p>
         </div>
     );
 };
 
 const OrderCard = ({ order, currentTime }) => {
+    const config = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+    const steps = [
+        { label: 'Placed', icon: CheckCircle },
+        { label: 'Preparing', icon: ChefHat },
+        { label: 'Ready', icon: Bell },
+        { label: 'Served', icon: Utensils },
+    ];
+
     return (
-        <div className="space-y-6">
-            {/* Status Tracking Steps */}
-            <div className="relative px-2">
-                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-slate-100" />
-                <div className="space-y-6 relative">
-                    <div className="flex items-center gap-4 group">
-                        <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-100 relative z-10">
-                            <CheckCircle2 size={16} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-black text-slate-900 leading-none">Order Placed</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className={`flex items-center gap-4 group ${order.status === 'PENDING_VERIFICATION' ? 'opacity-40' : ''}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white relative z-10 ${order.status !== 'PENDING_VERIFICATION' ? 'bg-orange-500 shadow-lg shadow-orange-100 animate-pulse' : 'bg-slate-100 text-slate-400'}`}>
-                            <Flame size={16} fill="currentColor" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-black text-slate-900 leading-none">Preparing Food</p>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${order.status !== 'PENDING_VERIFICATION' ? 'text-orange-500' : 'text-slate-400'}`}>
-                                {order.status === 'PREPARING' ? 'In Progress' : order.status === 'PENDING_VERIFICATION' ? 'Awaiting Verification' : 'Done'}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className={`flex items-center gap-4 group ${['READY', 'COMPLETED'].includes(order.status) ? '' : 'opacity-40'}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center relative z-10 ${['READY', 'COMPLETED'].includes(order.status) ? 'bg-green-500 text-white shadow-lg shadow-green-100' : 'bg-slate-100 text-slate-400'}`}>
-                            <ShoppingBag size={16} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-black text-slate-900 leading-none">Ready for Pickup</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                {order.status === 'READY' ? 'Ready Now!' : 'Pending'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"
+        >
+            {/* Card header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <span className="text-xs text-white/40">
+                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${config.bg} ${config.color}`}>
+                    {config.label}
+                </span>
             </div>
 
-            {/* Hero Section: Countdown or Ready Badge */}
-            {['PENDING_VERIFICATION', 'PREPARING', 'READY'].includes(order.status) && (
-                <CountdownHero order={order} currentTime={currentTime} />
-            )}
+            <div className="p-4 space-y-4">
+                {/* Progress steps */}
+                <div className="flex items-center">
+                    {steps.map((step, i) => {
+                        const Icon = step.icon;
+                        const done = i < config.step;
+                        const active = i === config.step;
+                        return (
+                            <div key={i} className="flex items-center flex-1 last:flex-none">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${done ? 'bg-blue-600' : active ? 'bg-blue-600 ring-2 ring-blue-400/30' : 'bg-white/5 border border-white/10'
+                                    }`}>
+                                    <Icon size={13} className={done || active ? 'text-white' : 'text-white/20'} />
+                                </div>
+                                {i < steps.length - 1 && (
+                                    <div className={`flex-1 h-px mx-1 ${i < config.step ? 'bg-blue-600' : 'bg-white/10'}`} />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
 
-            {/* Order Details */}
-            <div className="bg-white rounded-4xl p-6 border border-slate-100 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Order Summary</h3>
-                    <div className="bg-slate-50 px-3 py-1 rounded-full text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                        {order.items.length} Items
+                {/* Status block */}
+                <CountdownBlock order={order} currentTime={currentTime} />
+
+                {/* Items */}
+                <div>
+                    <p className="text-xs font-medium text-white/40 mb-2">Items ({order.items.length})</p>
+                    <div className="bg-white/3 border border-white/5 rounded-xl divide-y divide-white/5">
+                        {order.items.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between px-3 py-2.5">
+                                <span className="text-sm text-white/80">{item.name}</span>
+                                <div className="flex items-center gap-2 text-sm">
+                                    <span className="text-white/30">×{item.quantity}</span>
+                                    <span className="font-semibold text-white">₹{item.price * item.quantity}</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                <div className="space-y-3">
-                    {order.items.map((item, i) => (
-                        <div key={i} className="flex justify-between items-center group">
-                            <span className="text-sm font-bold text-slate-700">{item.name} x {item.qty}</span>
-                            <span className="text-sm font-black text-slate-900">₹{item.price * item.qty}</span>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="pt-4 border-t border-dashed border-slate-200 flex justify-between items-center">
-                    <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Amount Paid</p>
-                        <p className="text-xl font-black text-slate-900 mt-1">₹{order.totalAmount}</p>
-                    </div>
-                    <div className="bg-green-50 text-green-600 p-2.5 rounded-2xl">
-                        <CheckCircle2 size={20} />
-                    </div>
+                {/* Total */}
+                <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                    <span className="text-sm text-white/40">Total</span>
+                    <span className="text-base font-bold text-white">₹{order.totalAmount}</span>
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 
 export default function ActiveOrders() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [tokenNumber, setTokenNumber] = useState(null);
+    const [tableId, setTableId] = useState(null);
     const socketRef = useRef(null);
     const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -152,217 +175,116 @@ export default function ActiveOrders() {
     }, []);
 
     useEffect(() => {
-        const storedUser = JSON.parse(localStorage.getItem('user'));
-        if (storedUser) {
-            setTokenNumber(storedUser.tokenNumber);
-        }
-
+        const currentTableId = getTableId(searchParams);
+        if (!validateTableId(currentTableId, navigate)) return;
+        setTableId(currentTableId);
         const fetchOrders = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                navigate('/login');
-                return;
-            }
             try {
-                const data = await getMyOrders(token);
+                const data = await getOrders(Number(currentTableId));
                 setOrders(data);
-            } catch (error) {
-                console.error('Failed to fetch orders:', error);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); }
+            finally { setLoading(false); }
         };
-
         fetchOrders();
-    }, []);
+    }, [searchParams, navigate]);
 
     useEffect(() => {
         socketRef.current = io(import.meta.env.VITE_API_URL);
-
-        return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-                socketRef.current = null;
-            }
-        };
+        return () => { socketRef.current?.disconnect(); };
     }, []);
 
     useEffect(() => {
-        if (!socketRef.current) return;
-
-        const handler = (updatedOrder) => {
-            const storedUser = JSON.parse(localStorage.getItem('user'));
-            if (storedUser && updatedOrder.user && (updatedOrder.user.tokenNumber === storedUser.tokenNumber || updatedOrder.user === storedUser._id)) {
-                setOrders(prevOrders => {
-                    const orderExists = prevOrders.some(o => o._id === updatedOrder._id);
-                    if (orderExists) {
-                        return prevOrders.map(order =>
-                            order._id === updatedOrder._id ? { ...order, ...updatedOrder } : order
-                        );
-                    } else {
-                        // If it's a new order (though usually fetched on mount/refresh)
-                        return [updatedOrder, ...prevOrders];
-                    }
-                });
-            }
+        if (!socketRef.current || !tableId) return;
+        const updateHandler = (updatedOrder) => {
+            if (updatedOrder.tableId !== tableId) return;
+            setOrders(prev => {
+                if (updatedOrder.status === 'PAID') return prev.filter(o => o._id !== updatedOrder._id);
+                const exists = prev.some(o => o._id === updatedOrder._id);
+                if (exists) return prev.map(o => o._id === updatedOrder._id ? { ...o, ...updatedOrder } : o);
+                return [updatedOrder, ...prev];
+            });
         };
-
-        socketRef.current.on('user_orderUpdated', handler);
-        socketRef.current.on('admin_newOrder', (newOrder) => {
-            const storedUser = JSON.parse(localStorage.getItem('user'));
-            if (storedUser && newOrder.user && (newOrder.user._id === storedUser._id || newOrder.user === storedUser._id)) {
-                setOrders(prev => [newOrder, ...prev]);
-            }
-        });
-
+        const deleteHandler = (id) => setOrders(prev => prev.filter(o => o._id !== id));
+        const newOrderHandler = (newOrder) => {
+            if (newOrder.tableId === tableId) setOrders(prev => [newOrder, ...prev]);
+        };
+        socketRef.current.on('user_orderUpdated', updateHandler);
+        socketRef.current.on('order_deleted', deleteHandler);
+        socketRef.current.on('admin_newOrder', newOrderHandler);
         return () => {
-            socketRef.current?.off('user_orderUpdated', handler);
-            socketRef.current?.off('admin_newOrder');
+            socketRef.current?.off('user_orderUpdated', updateHandler);
+            socketRef.current?.off('order_deleted', deleteHandler);
+            socketRef.current?.off('admin_newOrder', newOrderHandler);
         };
-    }, []);
+    }, [tableId]);
 
-    const liveOrders = orders.filter(o => ['PENDING_VERIFICATION', 'PREPARING', 'READY'].includes(o.status));
-    const pastOrders = orders.filter(o => ['COMPLETED', 'REJECTED'].includes(o.status));
+    const liveOrders = orders.filter(o => ['PENDING', 'PREPARING', 'READY', 'SERVED'].includes(o.status));
 
-    if (loading) {
-        return (
-            <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased">
-                <div className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden pb-20">
-                    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
-                        <div className="px-6 py-6 flex items-center gap-4">
-                            <div className="w-10 h-10 bg-slate-200 rounded-xl animate-pulse"></div>
-                            <div className="space-y-2">
-                                <div className="h-6 w-32 bg-slate-200 rounded animate-pulse"></div>
-                                <div className="h-3 w-20 bg-slate-200 rounded animate-pulse"></div>
-                            </div>
-                        </div>
-                    </header>
-                    <div className="flex-1 overflow-y-auto px-6 py-8 space-y-8">
-                        <div className="h-24 bg-slate-200 rounded-3xl animate-pulse"></div>
-                        <div className="space-y-4">
-                            <div className="h-8 w-48 bg-slate-200 rounded animate-pulse"></div>
-                            <div className="h-64 bg-slate-200 rounded-3xl animate-pulse"></div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        );
-    }
+    if (loading) return (
+        <main className="min-h-screen bg-[#0F172A] flex justify-center font-sans antialiased">
+            <div className="w-full max-w-md p-5 space-y-3 pt-20">
+                {[1, 2].map(i => <div key={i} className="h-48 bg-white/5 rounded-2xl animate-pulse" />)}
+            </div>
+        </main>
+    );
 
     return (
-        <main className="min-h-screen bg-slate-50 flex justify-center font-sans antialiased overflow-x-hidden">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-md bg-white shadow-2xl min-h-screen relative flex flex-col overflow-hidden pb-24"
-            >
+        <main className="min-h-screen bg-[#0F172A] flex justify-center font-sans antialiased">
+            <div className="w-full max-w-md min-h-screen flex flex-col">
+
                 {/* Header */}
-                <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-100">
-                    <div className="px-6 py-6 flex items-center gap-4">
-                        <button
-                            onClick={() => navigate('/')}
-                            className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all active:scale-90"
-                        >
-                            <ArrowLeft size={20} className="text-slate-800" />
-                        </button>
-                        <div>
-                            <h1 className="text-xl font-black text-slate-900 tracking-tight">Your Orders</h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                {liveOrders.length} active • {pastOrders.length} completed
-                            </p>
-                        </div>
+                <header className="sticky top-0 z-10 bg-[#0F172A]/95 backdrop-blur-xl border-b border-white/5 px-5 py-4 flex items-center gap-3">
+                    <button onClick={() => navigate(buildTablePath('/menu', tableId))}
+                        className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-white/70">
+                        <ArrowLeft size={18} />
+                    </button>
+                    <div className="flex-1">
+                        <h1 className="text-lg font-bold text-white">Your Orders</h1>
+                        <p className="text-xs text-white/40 flex items-center gap-1.5 mt-0.5">
+                            <span className="w-1.5 h-1.5 bg-green-400 rounded-full" />
+                            Live Kitchen Updates · {liveOrders.length} active
+                        </p>
                     </div>
+                    {tableId && (
+                        <div className="flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/30 px-3 py-1.5 rounded-xl">
+                            <Hash size={13} className="text-blue-400" />
+                            <span className="text-xs font-semibold text-blue-300">Table {tableId}</span>
+                        </div>
+                    )}
                 </header>
 
-                {/* Content Scroll Area */}
-                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-12">
-                    {/* Token Badge */}
-                    {tokenNumber && (
-                        <div className="bg-orange-500 rounded-3xl p-6 shadow-xl shadow-orange-100 flex items-center justify-between relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl" />
-                            <div className="relative z-10">
-                                <p className="text-[10px] font-black text-orange-100 uppercase tracking-[0.2em] mb-1">Permanent Token</p>
-                                <h2 className="text-3xl font-black text-white tracking-tight">#{tokenNumber}</h2>
-                            </div>
-                            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                                <Hash size={24} className="text-white" />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Live Orders Section */}
-                    <div className="space-y-8">
-                        <div className="flex items-center justify-between px-2">
-                            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                                <Flame size={20} className="text-orange-500" /> Live Status
-                            </h2>
-                        </div>
-
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 pb-24">
+                    <AnimatePresence>
                         {liveOrders.length === 0 ? (
-                            <div className="bg-slate-50 rounded-4xl p-10 text-center border border-dashed border-slate-200">
-                                <ShoppingBag size={40} className="text-slate-300 mx-auto mb-4" />
-                                <p className="text-sm font-bold text-slate-500">No active orders right now</p>
-                            </div>
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                className="flex flex-col items-center justify-center py-24 text-center">
+                                <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mb-5">
+                                    <ShoppingBag size={26} className="text-white/20" />
+                                </div>
+                                <p className="text-white/60 font-semibold mb-1">No active orders</p>
+                                <p className="text-white/30 text-sm mb-6">Explore our menu and place your first order</p>
+                                <button onClick={() => navigate(buildTablePath('/menu', tableId))}
+                                    className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-600/30">
+                                    <Plus size={15} /> Explore Menu
+                                </button>
+                            </motion.div>
                         ) : (
-                            <div className="space-y-12">
-                                {liveOrders.map(order => (
-                                    <OrderCard key={order._id} order={order} currentTime={currentTime} />
-                                ))}
-                            </div>
+                            liveOrders.map(order => (
+                                <OrderCard key={order._id} order={order} currentTime={currentTime} />
+                            ))
                         )}
-                    </div>
-
-                    {/* Past Orders Section */}
-                    {pastOrders.length > 0 && (
-                        <div className="space-y-6 pt-4">
-                            <div className="flex items-center justify-between px-2">
-                                <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                                    <Receipt size={20} className="text-slate-400" /> Today's Receipts
-                                </h2>
-                            </div>
-
-                            <div className="space-y-4">
-                                {pastOrders.map(order => (
-                                    <div key={order._id} className="bg-slate-50 rounded-3xl p-6 border border-slate-100 opacity-75 grayscale-[0.5] hover:grayscale-0 hover:opacity-100 transition-all duration-300">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Completed</p>
-                                                <p className="text-xs font-bold text-slate-500">{new Date(order.createdAt).toLocaleDateString()} at {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                            </div>
-                                            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${order.status === 'COMPLETED' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                                {order.status}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2 mb-4">
-                                            {order.items.map((item, i) => (
-                                                <div key={i} className="flex justify-between items-center text-xs font-medium text-slate-600">
-                                                    <span>{item.name} x {item.qty}</span>
-                                                    <span>₹{item.price * item.qty}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                                            <span className="text-sm font-black text-slate-900">Total Paid</span>
-                                            <span className="text-sm font-black text-slate-900">₹{order.totalAmount}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    </AnimatePresence>
                 </div>
 
-                {/* Sticky Footer Info */}
-                <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-6 bg-white/80 backdrop-blur-lg border-t border-slate-100 z-50">
-                    <button
-                        onClick={() => navigate('/')}
-                        className="w-full py-4 rounded-2xl font-black text-sm bg-slate-900 text-white shadow-xl shadow-slate-200 hover:bg-orange-600 transition-all transform active:scale-95"
-                    >
-                        Return to Home
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-[#0F172A]/95 backdrop-blur-xl border-t border-white/5 px-5 py-4">
+                    <button onClick={() => navigate(buildTablePath('/menu', tableId))}
+                        className="w-full py-3.5 bg-white/5 border border-white/10 text-white/70 rounded-xl text-sm font-medium hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-2">
+                        <Utensils size={15} /> Order More
                     </button>
                 </div>
-            </motion.div>
+            </div>
         </main>
     );
 }
