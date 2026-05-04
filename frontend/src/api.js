@@ -32,6 +32,23 @@ export const login = async (userData) => {
     }
 };
 
+// Customer phone-based auth (login or register)
+export const customerAuth = async ({ name, phone }) => {
+    try {
+        const response = await fetch(`${BASE_URL}/customers/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, phone }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Authentication failed');
+        return data;
+    } catch (error) {
+        console.error('Error in customerAuth:', error);
+        throw error;
+    }
+};
+
 export const getMenu = async () => {
     try {
         const response = await fetch(`${BASE_URL}/menu`);
@@ -141,9 +158,10 @@ export const createOrder = async (orderData) => {
                 items: orderData.items,
                 totalAmount: orderData.totalAmount,
                 cookingInstructions: orderData.cookingInstructions || '',
-                tableId: orderData.tableId ? Number(orderData.tableId) : null,
                 customerName: orderData.customerName || 'Guest',
-                customerPhone: orderData.customerPhone || ''
+                customerPhone: orderData.customerPhone || '',
+                customerId: orderData.customerId || null,
+                scheduledFor: orderData.scheduledFor || null,
             }),
         });
 
@@ -172,16 +190,13 @@ export const getActiveOrders = async () => {
     }
 };
 
-export const getOrders = async (tableId = null) => {
+export const getOrders = async (customerId = null) => {
     try {
-        const url = tableId
-            ? `${BASE_URL}/orders?tableId=${Number(tableId)}`
+        const url = customerId
+            ? `${BASE_URL}/orders?customerId=${customerId}`
             : `${BASE_URL}/orders`;
-
         const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error('Failed to fetch orders');
-        }
+        if (!response.ok) throw new Error('Failed to fetch orders');
         return await response.json();
     } catch (error) {
         console.error('Error in getOrders:', error);
@@ -203,6 +218,90 @@ export const getMyOrders = async (token) => {
         return data;
     } catch (error) {
         console.error('Error in getMyOrders:', error);
+        throw error;
+    }
+};
+
+export const getPeakHours = async (period = '30d', startDate = null, endDate = null) => {
+    try {
+        let url = `${BASE_URL}/analytics/peak-hours`;
+        if (startDate && endDate) {
+            url += `?startDate=${startDate}&endDate=${endDate}`;
+        } else {
+            url += `?period=${period}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch peak hours');
+        return data;
+    } catch (error) {
+        console.error('Error in getPeakHours:', error);
+        throw error;
+    }
+};
+
+export const getTrend = async (period = '7d', startDate = null, endDate = null) => {
+    try {
+        let url = `${BASE_URL}/analytics/trend`;
+        if (startDate && endDate) {
+            url += `?startDate=${startDate}&endDate=${endDate}`;
+        } else {
+            url += `?period=${period}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch trend');
+        return data;
+    } catch (error) {
+        console.error('Error in getTrend:', error);
+        throw error;
+    }
+};
+
+export const getAnalytics = async (date = null, startDate = null, endDate = null) => {
+    try {
+        let url = `${BASE_URL}/analytics/summary`;
+        if (startDate && endDate) {
+            url += `?startDate=${startDate}&endDate=${endDate}`;
+        } else if (date) {
+            url += `?date=${date}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch analytics');
+        return data;
+    } catch (error) {
+        console.error('Error in getAnalytics:', error);
+        throw error;
+    }
+};
+
+export const getItemAnalytics = async (period = '30d', limit = 10, startDate = null, endDate = null) => {
+    try {
+        let url = `${BASE_URL}/analytics/items?limit=${limit}`;
+        if (startDate && endDate) {
+            url += `&startDate=${startDate}&endDate=${endDate}`;
+        } else {
+            url += `&period=${period}`;
+        }
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch item analytics');
+        return data;
+    } catch (error) {
+        console.error('Error in getItemAnalytics:', error);
+        throw error;
+    }
+};
+
+export const getCustomerOrders = async (customerId) => {
+    try {
+        const response = await fetch(`${BASE_URL}/orders/customer/${customerId}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch orders');
+        return data;
+    } catch (error) {
+        console.error('Error in getCustomerOrders:', error);
         throw error;
     }
 };
@@ -275,52 +374,3 @@ export const deleteOrder = async (orderId) => {
     }
 };
 
-// ==================== TABLE MANAGEMENT ====================
-
-export const getTables = async () => {
-    try {
-        const response = await fetch(`${BASE_URL}/tables`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch tables');
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Error in getTables:', error);
-        throw error;
-    }
-};
-
-export const toggleTableStatus = async (tableNumber) => {
-    try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${BASE_URL}/tables/${tableNumber}/toggle`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to toggle table status');
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error in toggleTableStatus:', error);
-        throw error;
-    }
-};
-
-export const getTableStatus = async (tableNumber) => {
-    try {
-        const response = await fetch(`${BASE_URL}/tables/${tableNumber}/status`);
-        if (!response.ok) {
-            throw new Error('Failed to get table status');
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Error in getTableStatus:', error);
-        throw error;
-    }
-};

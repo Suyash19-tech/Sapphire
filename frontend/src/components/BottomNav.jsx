@@ -1,18 +1,13 @@
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, ShoppingCart, Package } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { getTableId, buildTablePath } from '../utils/tableUtils';
 import toast from 'react-hot-toast';
 
 export default function BottomNav() {
     const navigate = useNavigate();
     const location = useLocation();
-    const [searchParams] = useSearchParams();
     const { getTotalItems } = useCart();
     const totalItems = getTotalItems();
-
-    // Get tableId from URL or localStorage
-    const tableId = getTableId(searchParams);
 
     // Determine active tab based on current path
     const isActive = (path) => {
@@ -26,16 +21,16 @@ export default function BottomNav() {
         if (totalItems === 0) {
             toast.error('Your cart is empty!');
         } else {
-            navigate(buildTablePath('/checkout', tableId));
+            navigate('/checkout');
         }
     };
 
     const handleOrdersClick = () => {
-        navigate(buildTablePath('/orders', tableId));
+        navigate('/orders');
     };
 
     const handleMenuClick = () => {
-        navigate(buildTablePath('/menu', tableId));
+        navigate('/menu');
     };
 
     return (

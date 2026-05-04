@@ -3,12 +3,18 @@ const mongoose = require('mongoose');
 const orderSchema = new mongoose.Schema({
     tableId: {
         type: Number,
-        required: false, // Optional for non-table orders
+        required: false,
         index: true
     },
     sessionId: {
         type: String,
-        required: false, // Generated for table orders
+        required: false,
+        index: true
+    },
+    customerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Customer',
+        required: false,
         index: true
     },
     items: [{
@@ -37,11 +43,19 @@ const orderSchema = new mongoose.Schema({
     status: {
         type: String,
         default: 'PENDING',
-        enum: ['PENDING', 'PREPARING', 'READY', 'SERVED', 'PAID'],
+        enum: ['PENDING', 'PREPARING', 'READY', 'PAID', 'SCHEDULED'],
         index: true
     },
+    isScheduled: {
+        type: Boolean,
+        default: false
+    },
+    scheduledFor: {
+        type: Date,
+        default: null
+    },
     estimatedTime: {
-        type: Number, // In minutes
+        type: Number,
         default: 0
     },
     estimatedCompletionTime: {

@@ -7,11 +7,11 @@ import Checkout from './pages/Checkout';
 import ActiveOrders from './pages/ActiveOrders';
 import AdminDashboard from './pages/AdminDashboard';
 import Kitchen from './pages/Kitchen';
-import Tables from './pages/Tables';
-import InvalidTable from './pages/InvalidTable';
+import CustomerLogin from './pages/CustomerLogin';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
+import OrderReadyNotification from './components/OrderReadyNotification';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -25,16 +25,22 @@ const PublicRoute = ({ children }) => {
   return isAuthenticated ? <Navigate to="/" replace /> : children;
 };
 
-// Optional Auth Route (works with or without authentication)
-const OptionalAuthRoute = ({ children }) => {
-  // Always render children, no authentication required
-  return children;
+// Customer Route — requires customerToken
+const CustomerRoute = ({ children }) => {
+  const isCustomer = !!localStorage.getItem('customerToken');
+  return isCustomer ? children : <Navigate to="/login" replace />;
+};
+
+// Customer Public Route — redirect to menu if already logged in
+const CustomerPublicRoute = ({ children }) => {
+  const isCustomer = !!localStorage.getItem('customerToken');
+  return isCustomer ? <Navigate to="/menu" replace /> : children;
 };
 
 // Admin Route Component
 const AdminRoute = ({ children }) => {
   const isAdmin = localStorage.getItem('isAdmin') === 'true';
-  return isAdmin ? children : <Navigate to="/" replace />;
+  return isAdmin ? children : <Navigate to="/admin/login" replace />;
 };
 
 // This is your mobile Dashboard UI
@@ -189,27 +195,28 @@ export default function App() {
   return (
     <Router>
       <Toaster position="top-center" reverseOrder={false} />
+      {/* Global order-ready popup — works on any page the customer is on */}
+      <OrderReadyNotification />
       <Routes>
-        {/* Redirect home to invalid table page */}
-        <Route path="/" element={<Navigate to="/invalid-table" replace />} />
+        {/* Root → customer login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Guest Ordering Routes (No Auth Required) */}
-        <Route path="/menu" element={<OptionalAuthRoute><Menu /></OptionalAuthRoute>} />
-        <Route path="/checkout" element={<OptionalAuthRoute><Checkout /></OptionalAuthRoute>} />
-        <Route path="/orders" element={<OptionalAuthRoute><ActiveOrders /></OptionalAuthRoute>} />
-        <Route path="/invalid-table" element={<InvalidTable />} />
+        {/* Customer auth */}
+        <Route path="/login" element={<CustomerPublicRoute><CustomerLogin /></CustomerPublicRoute>} />
 
-        {/* Authenticated User Routes */}
-        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        {/* Customer ordering routes — require customerToken */}
+        <Route path="/menu" element={<CustomerRoute><Menu /></CustomerRoute>} />
+        <Route path="/checkout" element={<CustomerRoute><Checkout /></CustomerRoute>} />
+        <Route path="/orders" element={<CustomerRoute><ActiveOrders /></CustomerRoute>} />
 
-        {/* Public Routes (Auth) */}
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        {/* Admin auth — separate route */}
+        <Route path="/admin/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         {/* Admin/Kitchen Routes */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/kitchen" element={<AdminRoute><Kitchen /></AdminRoute>} />
-        <Route path="/tables" element={<AdminRoute><Tables /></AdminRoute>} />
       </Routes>
     </Router>
   );

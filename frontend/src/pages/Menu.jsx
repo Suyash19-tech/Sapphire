@@ -1,31 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Plus, Minus, Loader2, ShoppingCart, ChevronRight, Sparkles, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, Minus, Loader2, ShoppingCart, ChevronRight, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getMenu } from '../api';
 import { useCart } from '../context/CartContext';
 import BottomNav from '../components/BottomNav';
-import { getTableId, validateTableId, buildTablePath } from '../utils/tableUtils';
 
 // Food emoji map
 const getFoodEmoji = (name) => {
     const n = name.toLowerCase();
-    if (n.includes('dosa') || n.includes('uttapam')) return '🥞';
-    if (n.includes('idli')) return '🫓';
-    if (n.includes('burger')) return '🍔';
-    if (n.includes('pizza')) return '🍕';
-    if (n.includes('sandwich')) return '🥪';
-    if (n.includes('coffee')) return '☕';
-    if (n.includes('tea')) return '🍵';
-    if (n.includes('pasta') || n.includes('maggi')) return '🍜';
-    if (n.includes('rice') || n.includes('poha')) return '🍚';
-    if (n.includes('samosa')) return '🥟';
-    if (n.includes('paratha')) return '🫓';
+    if (n.includes('egg roll') || n.includes('egg')) return '🥚';
+    if (n.includes('chicken')) return '🍗';
     if (n.includes('paneer')) return '🧀';
-    if (n.includes('noodle') || n.includes('chow')) return '🍝';
-    if (n.includes('juice') || n.includes('shake') || n.includes('lassi')) return '🥤';
-    if (n.includes('soup')) return '🍲';
+    if (n.includes('chaap')) return '🍢';
+    if (n.includes('taco')) return '🌮';
+    if (n.includes('fries') || n.includes('french')) return '🍟';
+    if (n.includes('cold coffee')) return '🧋';
+    if (n.includes('coffee')) return '☕';
+    if (n.includes('cheese') && n.includes('potato')) return '🥔';
+    if (n.includes('corn')) return '🌽';
     if (n.includes('roll')) return '🌯';
     return '🍽️';
 };
@@ -33,15 +27,12 @@ const getFoodEmoji = (name) => {
 // Gradient map per category
 const getCategoryGradient = (category) => {
     const map = {
-        'South Indian': 'from-amber-900/60 to-orange-950/80',
-        'North Indian': 'from-red-900/60 to-rose-950/80',
-        'Quick Snacks': 'from-yellow-900/60 to-amber-950/80',
+        'Non-Veg Rolls': 'from-orange-900/60 to-red-950/80',
+        'Veg Rolls': 'from-green-900/60 to-emerald-950/80',
+        'Tacos': 'from-yellow-900/60 to-amber-950/80',
+        'Starters': 'from-amber-900/60 to-orange-950/80',
         'Beverages': 'from-cyan-900/60 to-blue-950/80',
-        'Pizza & Burger': 'from-red-900/60 to-orange-950/80',
-        'Chinese': 'from-red-900/60 to-pink-950/80',
-        'Sandwich': 'from-green-900/60 to-emerald-950/80',
-        'Paratha': 'from-yellow-900/60 to-orange-950/80',
-        'Pasta & Maggi': 'from-orange-900/60 to-amber-950/80',
+        'Add-ons': 'from-slate-800/60 to-slate-950/80',
     };
     return map[category] || 'from-blue-900/60 to-slate-950/80';
 };
@@ -222,25 +213,23 @@ const MenuItemCard = ({ item, qty, onAdd, onIncrease, onDecrease }) => {
 
 export default function Menu() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
     const { cart: cartItems, addToCart, increaseQuantity, decreaseQuantity, getTotalItems, getTotalPrice } = useCart();
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [menuData, setMenuData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [tableId, setTableId] = useState(null);
     const scrollContainerRef = useRef(null);
 
+    // Get customer from localStorage
+    const customer = JSON.parse(localStorage.getItem('customer') || '{}');
+
     useEffect(() => {
-        const currentTableId = getTableId(searchParams);
-        if (!currentTableId) { validateTableId(null, navigate); return; }
-        setTableId(currentTableId);
-        const hasShownWelcome = sessionStorage.getItem(`welcomed_table_${currentTableId}`);
-        if (!hasShownWelcome) {
-            toast.success(`Welcome to Sapphire — Table ${currentTableId}`, { icon: '🍽️', duration: 3000 });
-            sessionStorage.setItem(`welcomed_table_${currentTableId}`, 'true');
+        const hasShownWelcome = sessionStorage.getItem(`welcomed_${customer._id}`);
+        if (customer.name && !hasShownWelcome) {
+            toast.success(`Welcome, ${customer.name}!`, { icon: '🍽️', duration: 3000 });
+            sessionStorage.setItem(`welcomed_${customer._id}`, 'true');
         }
-    }, [searchParams, navigate]);
+    }, []);
 
     useEffect(() => {
         const fetchAndCacheMenu = async () => {
@@ -296,16 +285,14 @@ export default function Menu() {
                             <div className="flex items-center gap-2 mb-0.5">
                                 <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
                                 <span className="text-xs font-medium text-green-400 tracking-wide">Kitchen Open</span>
-                                {tableId && <>
+                                {customer.name && <>
                                     <span className="text-white/20">·</span>
-                                    <span className="text-xs font-semibold text-blue-400">Table {tableId}</span>
+                                    <span className="text-xs font-semibold text-blue-400">{customer.name}</span>
                                 </>}
                             </div>
-                            <h1 className="text-xl font-bold text-white tracking-tight">Sapphire Menu</h1>
+                            <h1 className="text-xl font-bold text-white tracking-tight">Witchers Burrito</h1>
                         </div>
-                        <div className="w-9 h-9 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center">
-                            <Sparkles size={16} className="text-blue-400" />
-                        </div>
+
                     </div>
 
                     {/* Search */}
@@ -372,7 +359,7 @@ export default function Menu() {
 
                 {/* ── Floating Cart Bar ── */}
                 <AnimatePresence>
-                    {totalItems > 0 && tableId && (
+                    {totalItems > 0 && (
                         <motion.div
                             initial={{ y: 80, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
@@ -381,7 +368,7 @@ export default function Menu() {
                             className="fixed bottom-[72px] left-0 right-0 max-w-md mx-auto px-4 z-40"
                         >
                             <button
-                                onClick={() => navigate(buildTablePath('/checkout', tableId))}
+                                onClick={() => navigate('/checkout')}
                                 className="w-full bg-blue-600 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-2xl shadow-blue-600/40 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-between"
                             >
                                 <div className="flex items-center gap-3">
