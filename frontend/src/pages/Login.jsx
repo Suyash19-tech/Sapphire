@@ -37,7 +37,7 @@ export default function Login() {
     };
 
     return (
-        <main className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans antialiased px-4">
+        <main className="min-h-screen bg-[#0F272A] flex items-center justify-center font-sans antialiased px-4">
             <div className="w-full max-w-sm">
 
                 {/* Logo */}
@@ -45,7 +45,7 @@ export default function Login() {
                     <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl shadow-xl shadow-blue-600/30 mb-4">
                         <UtensilsCrossed className="text-white w-7 h-7" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">Sapphire</h1>
+                    <h1 className="text-2xl font-bold text-white">Witchers Burrito</h1>
                     <p className="text-sm text-white/40 mt-1">Staff Portal</p>
                 </div>
 
@@ -108,7 +108,7 @@ export default function Login() {
                 {/* Footer note */}
                 <div className="flex items-center justify-center gap-2 mt-5 text-xs text-white/25">
                     <ShieldCheck size={13} />
-                    <span>Sapphire Restaurant — Staff access only</span>
+                    <span>Witchers Burrito — Staff access only</span>
                 </div>
             </div>
         </main>

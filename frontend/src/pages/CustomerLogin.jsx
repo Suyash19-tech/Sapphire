@@ -50,7 +50,7 @@ export default function CustomerLogin() {
     };
 
     return (
-        <main className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans antialiased px-4">
+        <main className="min-h-screen bg-[#0F272A] flex items-center justify-center font-sans antialiased px-4">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
